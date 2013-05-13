@@ -13,7 +13,7 @@ echo "| -brint       |           |                |"
 echo "|$RED eth0    eth1$NORMAL |           |$RED eth1 eth0 eth2$NORMAL |"
 echo "|__$RED|$NORMAL""_______$RED|$NORMAL""___|           |__$RED|$NORMAL""____$RED|$NORMAL""___$RED""brex$NORMAL""_|"
 echo "$RED   |       |____VM_Network____|    |    |"
-echo "   |            10.20.20.0/24      |    |"
+echo "   |          10.20.20.0/24        |    |"
 echo "   |______Management_Network_______|    |"
 echo "   |       10.10.10.0/24                |                         _  _"
 echo '   |'"$NORMAL"'    ___________________             '"$RED"'|                        ( `   )_'
@@ -41,15 +41,27 @@ function doCompute
 
 function doNetwork
 {
+  echo "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
   echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
+  apt-get install -y ntp
+  sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server ntp.ubuntu.com/server 10.10.10.51/g' /etc/ntp.conf
+  service ntp restart
+  apt-get install -y vlan bridge-utils
+  sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+  sysctl net.ipv4.ip_forward=1
 }
 
 function doController
 {
+# Ubuntu Preparation
   echo "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
   echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
@@ -57,7 +69,9 @@ function doController
   apt-get upgrade -y
   apt-get dist-upgrade -y
 
+# Networking
   echo "$BLUE -- Networking --$NORMAL"
+# Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
   read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
   if [ $inetII = "static" ]
@@ -67,10 +81,12 @@ function doController
     read -p 'What is gateway of this Interface ? ' gatewayII
     read -p 'What is DNS of this Interface ? ' dnsII
   fi
+# Openstack Management Network Questions
   read -p 'What is OpenStack Management Interface ? ' openstackInterface
   inetOI="static"
   read -p 'What is address of this Interface ? ' addressOI
   read -p 'What is netmask of this Interface ? ' netmaskOI
+# Ask Confirmation For Change
   echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
   echo "$GREEN #For Exposing OpenStack API over the internet$NORMAL
   auto $internetInterface
@@ -89,6 +105,7 @@ function doController
     netmask $netmaskOI"
   echo "$RED Your Network file will are ERASE$NORMAL"
   read -p "Do you want to continue ? (Y/N) " continue
+# Write File /etc/network/interfaces if continue=Y
   if [ continue = "Y" ]
   then
     echo "" > /etc/network/interfaces
@@ -124,12 +141,17 @@ iface lo inet loopback
     netmaskII=$(ifconfig $inetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
 
+# MySQL + RabbitMQ
   echo "$BLUE -- MySQL & RabbitMQ --$NORMAL"
+# Installation
   apt-get install -y mysql-server python-mysqldb
+# Listen on all address
   sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/my.cnf
   service mysql restart
+# Installation
   apt-get install -y rabbitmq-server
   apt-get install -y ntp
+# Create Databases with Permissions
   echo "CREATE DATABASE keystone;\
 GRANT ALL ON keystone.* TO 'keystoneUser'@'%' IDENTIFIED BY 'keystonePass';\
 CREATE DATABASE glance;\
@@ -142,18 +164,23 @@ CREATE DATABASE cinder;\
 GRANT ALL ON cinder.* TO 'cinderUser'@'%' IDENTIFIED BY 'cinderPass';\
 quit;" > mysql -u root -p
 
+# Other (vlan-bridge)
   echo "$BLUE -- Other --$NORMAL"
   apt-get install -y vlan bridge-utils
   sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
   sysctl net.ipv4.ip_forward=1
 
+# Keystone
   echo "$BLUE -- Keystone --$NORMAL"
   apt-get install -y keystone
+# Change sql connection keystone.conf
   sed -i 's/^\(connection.*\)/#\1\nconnection = mysql:\/\/keystoneUser:keystonePass@'"$addressOI"'\/keystone/g' /etc/keystone/keystone.conf
   service keystone restart
   keystone-manage db_sync
+# Download 2 scripts
   wget https://raw.github.com/mseknibilel/OpenStack-Grizzly-Install-Guide/OVS_MultiNode/KeystoneScripts/keystone_basic.sh
   wget https://raw.github.com/mseknibilel/OpenStack-Grizzly-Install-Guide/OVS_MultiNode/KeystoneScripts/keystone_endpoints_basic.sh
+# Change IP in scripts
   sed -i 's/^\(HOST_IP.*\)/#\1\nHOST_IP='"$addressOI"'/g' keystone_basic.sh
   sed -i 's/^\(HOST_IP.*\)/#\1\nHOST_IP='"$addressOI"'/g' keystone_endpoints_basic.sh
   sed -i 's/^\(EXT_HOST_IP.*\)/#\1\nEXT_HOST_IP='"$addressII"'/g' keystone_endpoints_basic.sh
@@ -161,6 +188,7 @@ quit;" > mysql -u root -p
   chmod +x keystone_endpoints_basic.sh
   ./keystone_basic.sh
   ./keystone_endpoints_basic.sh
+# Create soource files for services connection
   touch sources
   echo "#Paste the following:
 export OS_TENANT_NAME=admin
@@ -173,49 +201,65 @@ export OS_SERVICE_TOKEN=ADMIN" > sources
   echo "$GREEN Comande keystone user-list$NORMAL"
   keystone user-list
 
+# Glance
   echo "$BLUE -- GLANCE --$NORMAL"
   apt-get install -y glance
+# Edit glance-api-paste.ini
   echo "auth_host = $addressOI
 auth_port = 35357
 auth_protocol = http
 admin_tenant_name = service
 admin_user = glance
 admin_password = service_pass" >> /etc/glance/glance-api-paste.ini
- echo "auth_host = $addressOI
+# Edit glance-registry-paste.ini
+  echo "auth_host = $addressOI
 auth_port = 35357
 auth_protocol = http
 admin_tenant_name = service
 admin_user = glance
 admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
+# Edit glance-api.conf
   sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/glanceUser:glancePass@'"$addressOI"'\/glance/g' /etc/glance/glance-api.conf
   echo "flavor = keystone" >> /etc/glance/glance-api.conf
+# Edit glance-registry.conf
   sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/glanceUser:glancePass@'"$addressOI"'\/glance/g' /etc/glance/glance-registry.conf
   echo "flavor = keystone" >> /etc/glance/glance-registry.conf
   service glance-api restart; service glance-registry restart
+# Sync Database
   glance-manage db_sync
+# Download Image and Add
   glance image-create --name myFirstImage --is-public true --container-format bare --disk-format qcow2 --location https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img
   echo "$GREEN Commande glance image-list$NORMAL"
   glance image-list
 
+# Quantum
   echo "$BLUE -- Quantum --$NORMAL"
+# Installation
   apt-get install -y quantum-server
+# Edit ovs_quantum_plugin.ini
   sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOI"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+# Edit api-paste.ini
   sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$addressOI"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
+# Edit quantum.conf
   sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/quantum.conf
   service quantum-server restart
 
+# Nova
   echo "$BLUE -- Nova --$NORMAL"
+# Installation
   apt-get install -y nova-api nova-cert novnc nova-consoleauth nova-scheduler nova-novncproxy nova-doc nova-conductor
+# Edit api-paste.ini
   sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/nova/api-paste.ini
+# Edit nova.conf
   sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
   echo "" >> /etc/nova/nova.conf
   echo "logdir=/var/log/nova
@@ -266,27 +310,35 @@ compute_driver=libvirt.LibvirtDriver
 # Cinder #
 volume_api_class=nova.volume.cinder.API
 osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
+# Sync Database
   nova-manage db sync
+# Path of home directory
   home=$(pwd)
   cd /etc/init.d/; for i in $( ls nova-* ); do sudo service $i restart; done
   cd $home
   echo "$GREEN Commende nova-manage service list$NORMAL"
   nova-manage service list
 
+# Cinder
   echo "$BLUE -- Cinder --$NORMAL"
+# Installation
   apt-get install -y cinder-api cinder-scheduler cinder-volume iscsitarget open-iscsi iscsitarget-dkms
   sed -i 's/false/true/g' /etc/default/iscsitarget
   service iscsitarget start
   service open-iscsi start
+# Edit api-paste.ini
   sed -i 's/\(^service_host.*\)/#\1\nservice_host = '"$addressII"'/g' /etc/cinder/api-paste.ini
   sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/cinder/api-paste.ini
   sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/cinder/api-paste.ini
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = cinder/g' /etc/cinder/api-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/cinder/api-paste.ini
+# Edit cinder.conf
   echo "sql_connection = mysql://cinderUser:cinderPass@"$addressOI"/cinder" >> /etc/cinder/cinder.conf
   echo "iscsi_ip_address=$addressOI" >> /etc/cinder/cinder.conf
+# Sync Database
   cinder-manage db sync
   read -p "What is the disk for your Volume Group ? " diskVG
+# Create PV and VG
   pvcreate $diskVG
   vgcreate cinder-volumes $diskVG
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i restart; done
@@ -294,8 +346,10 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i status; done
   cd $home
 
+# Horizon
   echo "$BLUE -- HORIZON --$NORMAL"
   apt-get install -y openstack-dashboard memcached
+# Remove Ubuntu Theme
   dpkg --purge openstack-dashboard-ubuntu-theme
   service apache2 restart; service memcached restart
 }
