@@ -41,12 +41,14 @@ function doCompute
 
 function doNetwork
 {
+# Ubuntu Preparation
   echo "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
   echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
+# Install and configure ntp
   apt-get install -y ntp
   sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
   sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
@@ -54,9 +56,153 @@ function doNetwork
   sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
   sed -i 's/server ntp.ubuntu.com/server 10.10.10.51/g' /etc/ntp.conf
   service ntp restart
+# Install vlan bridge
   apt-get install -y vlan bridge-utils
   sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
   sysctl net.ipv4.ip_forward=1
+
+# Networking
+  echo "$BLUE -- Networking --$NORMAL"
+# Internet Network Questions
+  read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
+  read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
+  if [ $inetII = "static" ]
+  then
+    read -p 'What is address of this Interface ? ' addressII
+    read -p 'What is netmask of this Interface ? ' netmaskII
+    read -p 'What is gateway of this Interface ? ' gatewayII
+    read -p 'What is DNS of this Interface ? ' dnsII
+  fi
+# Openstack Management Network Questions
+  read -p 'What is OpenStack Management Interface ? ' openstackInterface
+  inetOI="static"
+  read -p 'What is address of this Interface ? ' addressOI
+  read -p 'What is netmask of this Interface ? ' netmaskOI
+# Openstack Virtual Machine Network Questions
+  read -p 'What is Virtual Machine Network Interface ? ' VMInterface
+  inetVMI="static"
+  read -p 'What is address of this Interface ? ' addressVMI
+  read -p 'What is netmask of this Interface ? ' netmaskVMI
+# Ask Confirmation For Change
+  echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
+  echo "$GREEN #Internet Interface$NORMAL
+  auto br-ex
+  iface br-ex inet $inetII" >> /etc/network/interfaces
+  if [ $inetII = "static" ]
+  then
+    echo "    address $addressII
+    netmask $netmaskII
+    gateway $gatewayII
+    dns-nameservers $dnsII"
+  fi
+  echo "auto $internetInterface
+  iface $internetInterface inet manual
+  up ifconfig $IFACE 0.0.0.0 up
+  up ip link set $IFACE promisc on
+  down ip link set $IFACE promisc off
+  down ifconfig $IFACE down"
+  echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
+  auto $openstackInterface
+  iface $openstackInterface inet $inetOI
+  address $addressOI
+    netmask $netmaskOI"
+  echo "$GREEN #VM Configuration$NORMAL
+  auto $VMInterface
+  iface $VMInterface inet $inetVMI
+    address $addressVMI
+    netmask $netmaskVMI"
+  echo "$RED Your Network file will are ERASE$NORMAL"
+  read -p "Do you want to continue ? (Y/N) " continue
+# Write File /etc/network/interfaces if continue=Y
+  if [ continue = "Y" ]
+  then
+    echo "" > /etc/network/interfaces
+    echo "# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+" > /etc/network/interfaces
+  echo "#Internet Interface
+  auto br-ex
+  iface br-ex inet $inetII" >> /etc/network/interfaces
+  if [ $inetII = "static" ]
+  then
+    echo "    address $addressII
+    netmask $netmaskII
+    gateway $gatewayII
+    dns-nameservers $dnsII
+" >> /etc/network/interfaces
+  fi
+  echo "auto $internetInterface
+  iface $internetInterface inet manual
+  up ifconfig $IFACE 0.0.0.0 up
+  up ip link set $IFACE promisc on
+  down ip link set $IFACE promisc off
+  down ifconfig $IFACE down
+" >> /etc/network/interfaces
+  echo "#Not internet connected(used for OpenStack management)
+  auto $openstackInterface
+  iface $openstackInterface inet $inetOI
+    address $addressOI
+    netmask $netmaskOI
+" >> /etc/network/interfaces
+echo "#VM Configuration
+  auto $VMInterface
+  iface $VMInterface inet $inetVMI
+    address $addressVMI
+    netmask $netmaskVMI" >> /etc/network/interfaces
+  echo "Your file was writed with new values"
+  fi
+  service networking restart
+  if [ $inetII = "static" ]
+  then
+    addressII=$(ifconfig $inetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    netmaskII=$(ifconfig $inetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+  fi
+
+# OpenVSwitch
+  echo "$BLUE -- OpenVSwitch --$NORMAL"
+# Installation
+  apt-get install -y openvswitch-switch openvswitch-datapath-dkms
+# Create Bridge
+  ovs-vsctl add-br br-int
+  ovs-vsctl add-br br-ex
+  ovs-vsctl add-port br-ex $internetInterface
+  service networking restart
+
+# Quantum
+  echo "$BLUE -- Quantum --$NORMAL"
+# Installation
+  apt-get -y install quantum-plugin-openvswitch-agent quantum-dhcp-agent quantum-l3-agent quantum-metadata-agent
+# Edit api-paste.ini
+  sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$addressOI"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
+# Edit ovs_quantum_plugin.ini
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOI"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: integration_bridge = br-int\)/\1\nintegration_bridge = br-int/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: tunnel_bridge = br-tun\)/\1\ntunnel_bridge = br-tun/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+# Edit metadata_agent.ini
+  sed -i 's/\(auth_url.*\)/#\1\nauth_url = http:\/\/'"$addressOI"':35357/v2.0/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/\(admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/\(admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/\(admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/# \(nova_metadata_ip = \)127.0.0.1/\1'"$addressOI"'/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/# \(nova_metadata_port.*\)/\1/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/# \(metadata_proxy_shared_secret =\)/\1 helloOpenStack/g' /etc/quantum/metadata_agent.ini
+# Edit quantum.conf
+  sed -i 's/\(# rabbit_host = localhost\)/\1\nrabbit_host = '"$addressOI"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/quantum.conf
+# Path of home directory
+  home=$(pwd)
+  cd /etc/init.d/; for i in $( ls quantum-* ); do sudo service $i restart; done
+  cd $home
 }
 
 function doController
@@ -100,8 +246,8 @@ function doController
   fi
   echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
   auto $openstackInterface
-  iface $openstackInterface inet $inetOI"
-  echo "    address $addressOI
+  iface $openstackInterface inet $inetOI
+  address $addressOI
     netmask $netmaskOI"
   echo "$RED Your Network file will are ERASE$NORMAL"
   read -p "Do you want to continue ? (Y/N) " continue
@@ -129,8 +275,8 @@ iface lo inet loopback
   fi
   echo "#Not internet connected(used for OpenStack management)
   auto $openstackInterface
-  iface $openstackInterface inet $inetOI" >> /etc/network/interfaces
-  echo "    address $addressOI
+  iface $openstackInterface inet $inetOI
+    address $addressOI
     netmask $netmaskOI" >> /etc/network/interfaces
   echo "Your file was writed with new values"
   fi
@@ -194,7 +340,7 @@ quit;" > mysql -u root -p
 export OS_TENANT_NAME=admin
 export OS_USERNAME=admin
 export OS_PASSWORD=admin_pass
-export OS_AUTH_URL=\"http://"$addressOI":5000/v2.0/\"
+export OS_AUTH_URL=\"http://"$addressII":5000/v2.0/\"
 export OS_SERVICE_ENDPOINT=http://"$addressOI":35357/v2.0
 export OS_SERVICE_TOKEN=ADMIN" > sources
   source sources
