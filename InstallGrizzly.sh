@@ -32,11 +32,208 @@ echo ""
 
 function doCompute
 {
+# Ubntu Preparation
   apt-get install -y ubuntu-cloud-keyring
   echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
+# Install and configure ntp
+  apt-get install -y ntp
+  sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server ntp.ubuntu.com/server 10.10.10.51/g' /etc/ntp.conf
+  service ntp restart
+# Install vlan bridge
+  apt-get install -y vlan bridge-utils
+  sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+  sysctl net.ipv4.ip_forward=1
+
+# Networking
+  echo "$BLUE -- Networking --$NORMAL"
+# Openstack Management Network Questions
+  read -p 'What is OpenStack Management Interface ? ' openstackInterface
+  inetOI="static"
+  read -p 'What is address of this Interface ? ' addressOI
+  read -p 'What is netmask of this Interface ? ' netmaskOI
+# Virtual Machine Network Questions
+  read -p 'What is Virtual Machine Interface ? ' vmInterface
+  inetVMI="static"
+  read -p 'What is address of this Interface ? ' addressVMI
+  read -p 'What is netmask of this Interface ? ' netmaskVMI
+# Ask Confirmation For Change
+  echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
+  echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
+  auto $openstackInterface
+  iface $openstackInterface inet $inetOI
+    address $addressOI
+    netmask $netmaskOI"
+  echo "$GREEN #VM Network$NORMAL
+  auto $vmInterface
+  iface $vmInterface inet $inetVMI
+    address $addressVMI
+    netmask $netmaskVMI"
+  echo "$RED Your Network file will are ERASE$NORMAL"
+  read -p "Do you want to continue ? (Y/N) " continue
+# Write File /etc/network/interfaces if continue=Y
+  if [ continue = "Y" ]
+  then
+    echo "" > /etc/network/interfaces
+    echo "# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+" > /etc/network/interfaces
+  echo "#Not internet connected(used for OpenStack management)
+  auto $internetInterface
+  iface $internetInterface inet $inetII
+    address $addressII
+    netmask $netmaskII
+    gateway $gatewayII
+    dns-nameservers $dnsII
+" >> /etc/network/interfaces
+  echo "#VM Network
+  auto $vmInterface
+  iface $vmInterface inet $inetVMI
+    address $addressVMI
+    netmask $netmaskVMI" >> /etc/network/interfaces
+  echo "Your file was writed with new values"
+  fi
+  service networking restart
+
+# KVM
+  echo "$BLUE -- KVM --$NORMAL"
+# Install kvv-checker
+  apt-get install -y cpu-checker
+  kvm-ok
+# Install kvm
+  apt-get install -y kvm libvirt-bin pm-utils
+# configure quemu
+  echo "cgroup_device_acl = [
+"/dev/null", "/dev/full", "/dev/zero",
+"/dev/random", "/dev/urandom",
+"/dev/ptmx", "/dev/kvm", "/dev/kqemu",
+"/dev/rtc", "/dev/hpet","/dev/net/tun"
+]" >> /etc/libvirt/quemu.conf
+# Delete Default Virtuel Bridge
+  virsh net-destroy default
+  virsh net-undefine default
+# Enable Live Migration in /etc/libvirt/libvirtd.conf
+  sed -i 's/#\(listen_tls = 0\)/\1/g' /etc/libvirt/libvirtd.conf
+  sed -i 's/#\(listen_tcp = 1\)/\1/g' /etc/libvirt/libvirtd.conf
+  sed -i 's/\(#auth_tcp = "sasl"\)/\1\nauth_tcp = "none"/g' /etc/libvirt/libvirtd.conf
+# Edit /etc/init/libvirt-bin.conf
+  sed -i 's/\(env libvirtd_opts="-d\)/\1 -l/g' /etc/init/libvirt-bin.conf
+# Edit /etc/default/libvirt-bin
+  sed -i 's/\(libvirtd_opts="-d\)/\1 -l/g' /etc/default/libvirt-bin
+# Restart Service
+  service libvirt-bin restart
+
+# OpenVSwitch
+  echo "$BLUE -- OpenVSwitch --$NORMAL"
+# Installation
+  apt-get install -y openvswitch-switch openvswitch-datapath-dkms
+# Create Bridge
+  ovs-vsctl add-br br-int
+
+# Quantum
+  echo "$BLUE -- Quantum --$NORMAL"
+# Installation
+  apt-get -y install quantum-plugin-openvswitch-agent
+# Edit ovs_quantum_plugin.ini
+  read -p 'What is Openstack controller address ? ' addressOC
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: integration_bridge = br-int\)/\1\nintegration_bridge = br-int/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: tunnel_bridge = br-tun\)/\1\ntunnel_bridge = br-tun/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: local_ip =\)/\1\nlocal_ip = '"$addressOI"'/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+# Edit quantum.conf
+  sed -i 's/\(# rabbit_host = localhost\)/\1\nrabbit_host = '"$addressOC"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOC"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/quantum.conf
+# Restart Service
+  service quantum-plugin-openvswitch-agent restart
+
+# Nova
+  echo "$BLUE -- Nova --$NORMAL"
+# Installation
+  apt-get install -y nova-compute-kvm
+# Edit api-paste.ini
+  sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOC"'/g' /etc/nova/api-paste.ini
+  sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/nova/api-paste.ini
+  sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = nova/g' /etc/nova/api-paste.ini
+  sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/nova/api-paste.ini
+# Edit nova-compute.conf
+   sed -i 's/\(compute_driver.*\)/#\1\/g' /etc/nova/nova-compute.conf
+  echo "libvirt_ovs_bridge=br-int
+libvirt_vif_type=ethernet
+libvirt_vif_driver=nova.virt.libvirt.vif.LibvirtHybridOVSBridgeDriver
+libvirt_use_virtio_for_bridges=True" >> /etc/nova/nova-compute.conf
+# Edit nova.conf
+  read -p 'What is Openstack Controller Internet address ? ' addressOII
+  sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
+  echo "logdir=/var/log/nova
+state_path=/var/lib/nova
+lock_path=/run/lock/nova
+verbose=True
+api_paste_config=/etc/nova/api-paste.ini
+compute_scheduler_driver=nova.scheduler.simple.SimpleScheduler
+rabbit_host=$addressOC
+nova_url=http://"$addressOC":8774/v1.1/
+sql_connection=mysql://novaUser:novaPass@"$addressOC"/nova
+root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
+
+# Auth
+use_deprecated_auth=false
+auth_strategy=keystone
+
+# Imaging service
+glance_api_servers="$addressOC":9292
+image_service=nova.image.glance.GlanceImageService
+
+# Vnc configuration
+novnc_enabled=true
+novncproxy_base_url=http://"$addressOII":6080/vnc_auto.html
+novncproxy_port=6080
+vncserver_proxyclient_address=$addressOI
+vncserver_listen=0.0.0.0
+
+# Network settings
+network_api_class=nova.network.quantumv2.api.API
+quantum_url=http://"$addressOC":9696
+quantum_auth_strategy=keystone
+quantum_admin_tenant_name=service
+quantum_admin_username=quantum
+quantum_admin_password=service_pass
+quantum_admin_auth_url=http://"$addressOC":35357/v2.0
+libvirt_vif_driver=nova.virt.libvirt.vif.LibvirtHybridOVSBridgeDriver
+linuxnet_interface_driver=nova.network.linux_net.LinuxOVSInterfaceDriver
+firewall_driver=nova.virt.libvirt.firewall.IptablesFirewallDriver
+
+#Metadata
+service_quantum_metadata_proxy = True
+quantum_metadata_proxy_shared_secret = helloOpenStack
+
+# Compute #
+compute_driver=libvirt.LibvirtDriver
+
+# Cinder #
+volume_api_class=nova.volume.cinder.API
+osapi_volume_listen_port=5900
+cinder_catalog_info=volume:cinder:internalURL" >> /etc/nova/nova.conf
+  home=$(pwd)
+# Restart Service
+  cd /etc/init.d/; for i in $( ls nova-* ); do sudo service $i restart; done
+  cd $home
+  nova-manage service list
 }
 
 function doNetwork
@@ -177,25 +374,27 @@ echo "#VM Configuration
 # Installation
   apt-get -y install quantum-plugin-openvswitch-agent quantum-dhcp-agent quantum-l3-agent quantum-metadata-agent
 # Edit api-paste.ini
-  sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$addressOI"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
+  read -p 'What is Openstack controller address ? ' addressOC
+  sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$addressOC"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
 # Edit ovs_quantum_plugin.ini
-  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOI"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: integration_bridge = br-int\)/\1\nintegration_bridge = br-int/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: tunnel_bridge = br-tun\)/\1\ntunnel_bridge = br-tun/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/\(# Default: local_ip =\)/\1\nlocal_ip = '"$addressOI"'/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
 # Edit metadata_agent.ini
-  sed -i 's/\(auth_url.*\)/#\1\nauth_url = http:\/\/'"$addressOI"':35357/v2.0/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/\(auth_url.*\)/#\1\nauth_url = http:\/\/'"$addressOC"':35357/v2.0/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/metadata_agent.ini
-  sed -i 's/# \(nova_metadata_ip = \)127.0.0.1/\1'"$addressOI"'/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/# \(nova_metadata_ip = \)127.0.0.1/\1'"$addressOC"'/g' /etc/quantum/metadata_agent.ini
   sed -i 's/# \(nova_metadata_port.*\)/\1/g' /etc/quantum/metadata_agent.ini
   sed -i 's/# \(metadata_proxy_shared_secret =\)/\1 helloOpenStack/g' /etc/quantum/metadata_agent.ini
 # Edit quantum.conf
-  sed -i 's/\(# rabbit_host = localhost\)/\1\nrabbit_host = '"$addressOI"'/g' /etc/quantum/quantum.conf
-  sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(# rabbit_host = localhost\)/\1\nrabbit_host = '"$addressOC"'/g' /etc/quantum/quantum.conf
+  sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOC"'/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/quantum.conf
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/quantum.conf
@@ -403,11 +602,10 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
 # Edit api-paste.ini
   sed -i 's/\(^auth_host.*\)/#\1\nauth_host = '"$addressOI"'/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/nova/api-paste.ini
-  sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/nova/api-paste.ini
+  sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = nova/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/nova/api-paste.ini
 # Edit nova.conf
   sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
-  echo "" >> /etc/nova/nova.conf
   echo "logdir=/var/log/nova
 state_path=/var/lib/nova
 lock_path=/run/lock/nova
