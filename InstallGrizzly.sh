@@ -3,6 +3,7 @@ NORMAL="\\033[0;39m"
 RED="\\033[1;31m"
 BLUE="\\033[1;34m"
 GREEN="\\033[1;32m"
+YELLOW="\\033[1;33m"
 
 echo "________________           __________________"
 echo "|$BLUE Conpute Node$NORMAL |           | $BLUE Network Node$NORMAL  |"
@@ -10,25 +11,129 @@ echo "| -nova compute|           |  -quantum all  |"
 echo "| -kvm         |           |  -brint        |"
 echo "| -quantum ovs |           |                |"
 echo "| -brint       |           |                |"
-echo "|$RED eth0    eth1$NORMAL |           |$RED eth1 eth0 eth2$NORMAL |"
-echo "|__$RED|$NORMAL""_______$RED|$NORMAL""___|           |__$RED|$NORMAL""____$RED|$NORMAL""___$RED""brex$NORMAL""_|"
-echo "$RED   |       |____VM_Network____|    |    |"
-echo "   |          10.20.20.0/24        |    |"
-echo "   |______Management_Network_______|    |"
-echo "   |       10.10.10.0/24                |                         _  _"
-echo '   |'"$NORMAL"'    ___________________             '"$RED"'|                        ( `   )_'
-echo '   |    '"$NORMAL"'|'"$BLUE"' Controller Node'"$NORMAL"' |             '"$RED"'|__Internet_Network_____( Internet `)'
-echo '   |    '"$NORMAL"'| -keystone       |             '"$RED"'|  192.168.100.0/2     (_   (_ .  _) _)'
-echo "   |    $NORMAL| -glance         |             $RED|"
-echo "   |    $NORMAL| -horizon        |             $RED|"
-echo "   |    $NORMAL| -nova services  |             $RED|"
-echo "   |    $NORMAL| -quantum server |             $RED|"
-echo "   |    $NORMAL| $RED eth0     eth1$NORMAL  |             $RED|"
-echo "   |    $NORMAL|___$RED|$NORMAL""________$RED|$NORMAL""____|             $RED|"
-echo "   |________|        |__________________|$NORMAL"
+echo "|$RED eth0   $GREEN eth1$NORMAL |           |$GREEN eth1$RED eth0$YELLOW eth2$NORMAL |"
+echo "|__$RED|$NORMAL""_______$GREEN|$NORMAL""___|           |__$GREEN|$NORMAL""____$RED|$NORMAL""___$YELLOW""brex$NORMAL""_|"
+echo "$RED   |       $GREEN|____VM_Network____|$RED    |    $YELLOW|"
+echo "$RED   |         $GREEN 10.20.20.0/24      $RED  |    $YELLOW|"
+echo "$RED   |______Management_Network_______|    $YELLOW|"
+echo "$RED   |       10.10.10.0/24                $YELLOW|                         _  _"
+echo $RED'   |'"$NORMAL"'    ___________________             '"$YELLOW"'|                        ( `   )_'
+echo $RED'   |    '"$NORMAL"'|'"$BLUE"' Controller Node'"$NORMAL"' |             '"$YELLOW"'|__Internet_Network_____( Internet `)'
+echo $RED'   |    '"$NORMAL"'| -keystone       |             '"$YELLOW"'|  192.168.100.0/2     (_   (_ .  _) _)'
+echo "$RED   |    $NORMAL| -glance         |             $YELLOW|"
+echo "$RED   |    $NORMAL| -horizon        |             $YELLOW|"
+echo "$RED   |    $NORMAL| -nova services  |             $YELLOW|"
+echo "$RED   |    $NORMAL| -quantum server |             $YELLOW|"
+echo "$RED   |    $NORMAL| $RED eth0  $YELLOW   eth1$NORMAL  |             $YELLOW|"
+echo "$RED   |    $NORMAL|___$RED|$NORMAL""________$YELLOW|$NORMAL""____|             $YELLOW|"
+echo "$RED   |________|      $YELLOW  |__________________|$NORMAL"
 echo ""
 echo "$RED You must execute this Script in user home directory$NORMAL"
+echo "If you install more one Node on this Server you must install Network Node in last time for better results"
 echo ""
+
+function checkInterface
+{
+  while read line
+  do
+    interfaceName=$(echo $line | grep -o "^auto.*" | grep -o "[a-zA-Z0-9]*$")
+    if [ "$interfaceName" == "$1" ]
+    then
+      echo "true"
+      checkOK="true"
+    fi
+  done < /etc/network/interfaces
+  if [ -z "$checkOK" ]
+  then
+    echo "false"
+  fi
+}
+
+function checkConfigInterface
+{
+   while read line
+  do
+    interfaceName=$(echo $line | grep -o "^auto.*" | grep -o "[a-zA-Z0-9]*$")
+    if [ "$interfaceName" == "$1" ]
+    then
+      checkOK="true"
+    fi
+    if [ "$(echo $line | grep -o "^auto")" == "auto" ] && [ "$checkOK" == "true" ]
+    then
+      auto="true"
+      interfaceConf=$line
+    elif [ "$auto" == "true" ] && [ -n "$(echo $line | grep -o ".*")" ] && [ "$checkOK" == "true" ]
+    then
+      interfaceConf=$(echo "$interfaceConf\n    $line")
+    elif [ "$auto" == "true" ] && [ -z "$(echo $line | grep -o ".*")" ] && [ "$checkOK" == "true" ]
+    then
+      auto="false"
+      checkOK="false"
+      echo "$interfaceConf"
+    fi
+  done < /etc/network/interfaces
+  if [ "$checkOK" == "true" ]
+  then
+    echo "$interfaceConf"
+  fi
+}
+
+function askConfirmInterface
+{
+  if [ "$(checkInterface $1)" == "true" ]
+  then
+    interfaceConf=$(checkConfigInterface $1)
+    echo $RED"--- OLD Config Interface ---$NORMAL"
+    echo "$interfaceConf"
+  else
+    echo "$RED This Interface is not configured in your network file$NORMAL"
+  fi
+  echo $RED"--- NEW Config Interface ---$NORMAL"
+  echo "auto $1
+iface $1 inet $2"
+  if [ -n "$3" ]
+  then
+    echo "  address $3
+  netmask $4"
+  fi
+
+  if [ -n "$3" ]
+  then
+    newInterfaceConf=$(echo "auto $1
+iface $1 inet $2
+  address $3
+  netmask $4")
+  else
+    newInterfaceConf=$(echo "auto $1
+iface $1 inet $2")
+  fi
+}
+
+function writeInterface
+{
+  numLineStart=$(grep -n "^auto $1" file | cut -d":" -f1 | head -n 1)
+  nbLine=$(echo "$interfaceConf" | wc -l)
+  i="1"
+  while [ "$i" -le "$nbLine" ]
+  do
+    sed -i "" ''"$numLineStart"'d' /etc/network/interfaces
+    i=$(($i+1))
+  done
+  if [ -n "$5" ]
+  then
+  echo "
+# $5
+auto $1
+iface $1 inet $2
+  address $3
+  netmask $4" >> /etc/network/interfaces
+else
+  echo "
+# $3
+auto $1
+iface $1 inet $2" >> /etc/network/interfaces
+  fi
+}
 
 function doCompute
 {
@@ -64,44 +169,15 @@ function doCompute
   read -p 'What is address of this Interface ? ' addressVMI
   read -p 'What is netmask of this Interface ? ' netmaskVMI
 # Ask Confirmation For Change
-  echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
-  echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
-  auto $openstackInterface
-  iface $openstackInterface inet $inetOI
-    address $addressOI
-    netmask $netmaskOI"
-  echo "$GREEN #VM Network$NORMAL
-  auto $vmInterface
-  iface $vmInterface inet $inetVMI
-    address $addressVMI
-    netmask $netmaskVMI"
-  echo "$RED Your Network file will are ERASE$NORMAL"
-  read -p "Do you want to continue ? (Y/N) " continue
+  askConfirmInterface $openstackInterface $inetOI $addressOI $netmaskOI
+  askConfirmInterface $vmInterface $inetVMI $addressVMI $netmaskVMI
+  echo "$RED Your Network file will are Change$NORMAL"
+  read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ continue = "Y" ]
+  if [ "$write" = "Y" ]
   then
-    echo "" > /etc/network/interfaces
-    echo "# This file describes the network interfaces available on your system
-# and how to activate them. For more information, see interfaces(5).
-
-# The loopback network interface
-auto lo
-iface lo inet loopback
-" > /etc/network/interfaces
-  echo "#Not internet connected(used for OpenStack management)
-  auto $internetInterface
-  iface $internetInterface inet $inetII
-    address $addressII
-    netmask $netmaskII
-    gateway $gatewayII
-    dns-nameservers $dnsII
-" >> /etc/network/interfaces
-  echo "#VM Network
-  auto $vmInterface
-  iface $vmInterface inet $inetVMI
-    address $addressVMI
-    netmask $netmaskVMI" >> /etc/network/interfaces
-  echo "Your file was writed with new values"
+    writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack Management"
+    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
   fi
   service networking restart
 
@@ -263,7 +339,7 @@ function doNetwork
 # Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
   read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
-  if [ $inetII = "static" ]
+  if [ "$inetII" = "static" ]
   then
     read -p 'What is address of this Interface ? ' addressII
     read -p 'What is netmask of this Interface ? ' netmaskII
@@ -281,76 +357,29 @@ function doNetwork
   read -p 'What is address of this Interface ? ' addressVMI
   read -p 'What is netmask of this Interface ? ' netmaskVMI
 # Ask Confirmation For Change
-  echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
-  echo "$GREEN #Internet Interface$NORMAL
-  auto br-ex
-  iface br-ex inet $inetII" >> /etc/network/interfaces
-  if [ $inetII = "static" ]
+  echo "$RED Your Network file will are Change$NORMAL"
+  if [ "$inet" = "static" ]
   then
-    echo "    address $addressII
-    netmask $netmaskII
-    gateway $gatewayII
-    dns-nameservers $dnsII"
+    askConfirmInterface $internetInterface $inetII $addressII $netmaskII
+  else
+    askConfirmInterface $internetInterface $inetII
   fi
-  echo "auto $internetInterface
-  iface $internetInterface inet manual
-  up ifconfig $IFACE 0.0.0.0 up
-  up ip link set $IFACE promisc on
-  down ip link set $IFACE promisc off
-  down ifconfig $IFACE down"
-  echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
-  auto $openstackInterface
-  iface $openstackInterface inet $inetOI
-  address $addressOI
-    netmask $netmaskOI"
-  echo "$GREEN #VM Configuration$NORMAL
-  auto $VMInterface
-  iface $VMInterface inet $inetVMI
-    address $addressVMI
-    netmask $netmaskVMI"
-  echo "$RED Your Network file will are ERASE$NORMAL"
-  read -p "Do you want to continue ? (Y/N) " continue
+  askConfirmInterface $openstackInterface $inetOI $addressOI $netmaskOI
+  askConfirmInterface $vmInterface $inetVMI $addressVMI $netmaskVMI
+  read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ continue = "Y" ]
+  if [ "$write" = "Y" ] && [ $inetII = "static" ]
   then
-    echo "" > /etc/network/interfaces
-    echo "# This file describes the network interfaces available on your system
-# and how to activate them. For more information, see interfaces(5).
-
-# The loopback network interface
-auto lo
-iface lo inet loopback
-" > /etc/network/interfaces
-  echo "#Internet Interface
-  auto br-ex
-  iface br-ex inet $inetII" >> /etc/network/interfaces
-  if [ $inetII = "static" ]
+    writeInterface $internetInterface $inetII $addressII $netmaskII "Internet Interface"
+    writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack Management"
+    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
+    echo "Your file was writed with new values"
+  elif [ "$write" = "Y" ] && [ $inetII = "dhcp" ]
   then
-    echo "    address $addressII
-    netmask $netmaskII
-    gateway $gatewayII
-    dns-nameservers $dnsII
-" >> /etc/network/interfaces
-  fi
-  echo "auto $internetInterface
-  iface $internetInterface inet manual
-  up ifconfig $IFACE 0.0.0.0 up
-  up ip link set $IFACE promisc on
-  down ip link set $IFACE promisc off
-  down ifconfig $IFACE down
-" >> /etc/network/interfaces
-  echo "#Not internet connected(used for OpenStack management)
-  auto $openstackInterface
-  iface $openstackInterface inet $inetOI
-    address $addressOI
-    netmask $netmaskOI
-" >> /etc/network/interfaces
-echo "#VM Configuration
-  auto $VMInterface
-  iface $VMInterface inet $inetVMI
-    address $addressVMI
-    netmask $netmaskVMI" >> /etc/network/interfaces
-  echo "Your file was writed with new values"
+    writeInterface $internetInterface $inetII "Internet Interface"
+    writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack Management"
+    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
+    echo "Your file was writed with new values"
   fi
   service networking restart
   if [ $inetII = "static" ]
@@ -419,7 +448,7 @@ function doController
 # Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
   read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
-  if [ $inetII = "static" ]
+  if [ "$inetII" = "static" ]
   then
     read -p 'What is address of this Interface ? ' addressII
     read -p 'What is netmask of this Interface ? ' netmaskII
@@ -433,54 +462,29 @@ function doController
   read -p 'What is netmask of this Interface ? ' netmaskOI
 # Ask Confirmation For Change
   echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
-  echo "$GREEN #For Exposing OpenStack API over the internet$NORMAL
-  auto $internetInterface
-  iface $internetInterface inet $inetII"
-  if [ $inetII = "static" ]
+  if [ "$inetII" = "static"]
   then
-    echo "    address $addressII
-    netmask $netmaskII
-    gateway $gatewayII
-    dns-nameservers $dnsII"
+    askConfirmInterface $internetInterface $inetII $addressII $netmaskII
+  else
+    askConfirmInterface $internetInterface $inetII
   fi
-  echo "$GREEN #Not internet connected(used for OpenStack management)$NORMAL
-  auto $openstackInterface
-  iface $openstackInterface inet $inetOI
-  address $addressOI
-    netmask $netmaskOI"
-  echo "$RED Your Network file will are ERASE$NORMAL"
-  read -p "Do you want to continue ? (Y/N) " continue
+  askConfirmInterface $openstackInterface $inetOI $addressOI $netmaskOI
+  askConfirmInterface $vmInterface $inetVMI $addressVMI $netmaskVMI
+  echo "$RED Your Network file will are Change$NORMAL"
+  read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ continue = "Y" ]
+  if [ "$write" = "Y" ] && [ "$inetII" = "static" ]
   then
-    echo "" > /etc/network/interfaces
-    echo "# This file describes the network interfaces available on your system
-# and how to activate them. For more information, see interfaces(5).
-
-# The loopback network interface
-auto lo
-iface lo inet loopback
-" > /etc/network/interfaces
-  echo "#For Exposing OpenStack API over the internet
-  auto $internetInterface
-  iface $internetInterface inet $inetII" >> /etc/network/interfaces
-  if [ $inetII = "static" ]
-  then
-    echo "    address $addressII
-    netmask $netmaskII
-    gateway $gatewayII
-    dns-nameservers $dnsII
-" >> /etc/network/interfaces
-  fi
-  echo "#Not internet connected(used for OpenStack management)
-  auto $openstackInterface
-  iface $openstackInterface inet $inetOI
-    address $addressOI
-    netmask $netmaskOI" >> /etc/network/interfaces
-  echo "Your file was writed with new values"
+    write $internetInterface $inetII $addressOI $netmaskOI "Internet Interface"
+    writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack"
+    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
+  else
+    write $internetInterface $inetII "Internet Interface"
+    writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack"
+    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
   fi
   service networking restart
-  if [ $inetII = "static" ]
+  if [ "$inetII" = "static" ]
   then
     addressII=$(ifconfig $inetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
     netmaskII=$(ifconfig $inetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
