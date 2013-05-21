@@ -1,36 +1,38 @@
+#!/bin/bash
 #COLORS
+eval "`dircolors -b`"
 NORMAL="\\033[0;39m"
 RED="\\033[1;31m"
 BLUE="\\033[1;34m"
 GREEN="\\033[1;32m"
 YELLOW="\\033[1;33m"
 
-echo "________________           __________________"
-echo "|$BLUE Conpute Node$NORMAL |           | $BLUE Network Node$NORMAL  |"
-echo "| -nova compute|           |  -quantum all  |"
-echo "| -kvm         |           |  -brint        |"
-echo "| -quantum ovs |           |                |"
-echo "| -brint       |           |                |"
-echo "|$RED eth0   $GREEN eth1$NORMAL |           |$GREEN eth1$RED eth0$YELLOW eth2$NORMAL |"
-echo "|__$RED|$NORMAL""_______$GREEN|$NORMAL""___|           |__$GREEN|$NORMAL""____$RED|$NORMAL""___$YELLOW""brex$NORMAL""_|"
-echo "$RED   |       $GREEN|____VM_Network____|$RED    |    $YELLOW|"
-echo "$RED   |         $GREEN 10.20.20.0/24      $RED  |    $YELLOW|"
-echo "$RED   |______Management_Network_______|    $YELLOW|"
-echo "$RED   |       10.10.10.0/24                $YELLOW|                         _  _"
-echo $RED'   |'"$NORMAL"'    ___________________             '"$YELLOW"'|                        ( `   )_'
-echo $RED'   |    '"$NORMAL"'|'"$BLUE"' Controller Node'"$NORMAL"' |             '"$YELLOW"'|__Internet_Network_____( Internet `)'
-echo $RED'   |    '"$NORMAL"'| -keystone       |             '"$YELLOW"'|  192.168.100.0/2     (_   (_ .  _) _)'
-echo "$RED   |    $NORMAL| -glance         |             $YELLOW|"
-echo "$RED   |    $NORMAL| -horizon        |             $YELLOW|"
-echo "$RED   |    $NORMAL| -nova services  |             $YELLOW|"
-echo "$RED   |    $NORMAL| -quantum server |             $YELLOW|"
-echo "$RED   |    $NORMAL| $RED eth0  $YELLOW   eth1$NORMAL  |             $YELLOW|"
-echo "$RED   |    $NORMAL|___$RED|$NORMAL""________$YELLOW|$NORMAL""____|             $YELLOW|"
-echo "$RED   |________|      $YELLOW  |__________________|$NORMAL"
-echo ""
-echo "$RED You must execute this Script in user home directory$NORMAL"
-echo "If you install more one Node on this Server you must install Network Node in last time for better results"
-echo ""
+echo -e "________________           __________________"
+echo -e "|$BLUE Compute Node$NORMAL |           | $BLUE Network Node$NORMAL  |"
+echo -e "| -nova compute|           |  -quantum all  |"
+echo -e "| -kvm         |           |  -brint        |"
+echo -e "| -quantum ovs |           |                |"
+echo -e "| -brint       |           |                |"
+echo -e "|$RED eth0   $GREEN eth1$NORMAL |           |$GREEN eth1$RED eth0$YELLOW eth2$NORMAL |"
+echo -e "|__$RED|$NORMAL""_______$GREEN|$NORMAL""___|           |__$GREEN|$NORMAL""____$RED|$NORMAL""___$YELLOW""brex$NORMAL""_|"
+echo -e "$RED   |       $GREEN|____VM_Network____|$RED    |    $YELLOW|"
+echo -e "$RED   |         $GREEN 10.20.20.0/24      $RED  |    $YELLOW|"
+echo -e "$RED   |______Management_Network_______|    $YELLOW|"
+echo -e "$RED   |       10.10.10.0/24                $YELLOW|                         _  _"
+echo -e $RED'   |'"$NORMAL"'    ___________________             '"$YELLOW"'|                        ( `   )_'
+echo -e $RED'   |    '"$NORMAL"'|'"$BLUE"' Controller Node'"$NORMAL"' |             '"$YELLOW"'|__Internet_Network_____( Internet `)'
+echo -e $RED'   |    '"$NORMAL"'| -keystone       |             '"$YELLOW"'|  192.168.100.0/2     (_   (_ .  _) _)'
+echo -e "$RED   |    $NORMAL| -glance         |             $YELLOW|"
+echo -e "$RED   |    $NORMAL| -horizon        |             $YELLOW|"
+echo -e "$RED   |    $NORMAL| -nova services  |             $YELLOW|"
+echo -e "$RED   |    $NORMAL| -quantum server |             $YELLOW|"
+echo -e "$RED   |    $NORMAL| $RED eth0  $YELLOW   eth1$NORMAL  |             $YELLOW|"
+echo -e "$RED   |    $NORMAL|___$RED|$NORMAL""________$YELLOW|$NORMAL""____|             $YELLOW|"
+echo -e "$RED   |________|      $YELLOW  |__________________|$NORMAL"
+echo -e ""
+echo -e "$RED You must execute this Script in user home directory$NORMAL"
+echo -e "If you install more one Node on this Server you must install Network Node in last time for better results"
+echo -e ""
 
 function checkInterface
 {
@@ -39,13 +41,13 @@ function checkInterface
     interfaceName=$(echo $line | grep -o "^auto.*" | grep -o "[a-zA-Z0-9]*$")
     if [ "$interfaceName" == "$1" ]
     then
-      echo "true"
+echo -e "true"
       checkOK="true"
     fi
   done < /etc/network/interfaces
   if [ -z "$checkOK" ]
   then
-    echo "false"
+echo -e "false"
   fi
 }
 
@@ -69,12 +71,12 @@ function checkConfigInterface
     then
       auto="false"
       checkOK="false"
-      echo "$interfaceConf"
+echo -e "$interfaceConf"
     fi
   done < /etc/network/interfaces
   if [ "$checkOK" == "true" ]
   then
-    echo "$interfaceConf"
+echo -e "$interfaceConf"
   fi
 }
 
@@ -83,26 +85,26 @@ function askConfirmInterface
   if [ "$(checkInterface $1)" == "true" ]
   then
     interfaceConf=$(checkConfigInterface $1)
-    echo $RED"--- OLD Config Interface ---$NORMAL"
-    echo "$interfaceConf"
+echo -e $RED"--- OLD Config Interface ---$NORMAL"
+echo -e "$interfaceConf"
   else
-    echo "$RED This Interface is not configured in your network file$NORMAL"
+echo -e "$RED This Interface is not configured in your network file$NORMAL"
   fi
-  echo $RED"--- NEW Config Interface ---$NORMAL"
-  echo "auto $1
+echo -e $RED"--- NEW Config Interface ---$NORMAL"
+echo -e "auto $1
 iface $1 inet $2"
   if [ -n "$3" ]
   then
-    echo "  address $3
-  netmask $4"
+echo -e "address $3
+netmask $4"
   fi
 
   if [ -n "$3" ]
   then
     newInterfaceConf=$(echo "auto $1
 iface $1 inet $2
-  address $3
-  netmask $4")
+address $3
+netmask $4")
   else
     newInterfaceConf=$(echo "auto $1
 iface $1 inet $2")
@@ -111,24 +113,24 @@ iface $1 inet $2")
 
 function writeInterface
 {
-  numLineStart=$(grep -n "^auto $1" file | cut -d":" -f1 | head -n 1)
-  nbLine=$(echo "$interfaceConf" | wc -l)
+  numLineStart=$(grep -n "^auto $1" /etc/network/interfaces | cut -d":" -f1 | head -n 1)
+  nbLine=$(echo "$(checkConfigInterface $1)" | wc -l)
   i="1"
   while [ "$i" -le "$nbLine" ]
   do
-    sed -i "" ''"$numLineStart"'d' /etc/network/interfaces
+    sed -i "$numLineStart"'d' /etc/network/interfaces
     i=$(($i+1))
   done
   if [ -n "$5" ]
   then
-  echo "
+echo "
 # $5
 auto $1
 iface $1 inet $2
-  address $3
-  netmask $4" >> /etc/network/interfaces
+address $3
+netmask $4" >> /etc/network/interfaces
 else
-  echo "
+echo "
 # $3
 auto $1
 iface $1 inet $2" >> /etc/network/interfaces
@@ -139,7 +141,7 @@ function doCompute
 {
 # Ubntu Preparation
   apt-get install -y ubuntu-cloud-keyring
-  echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
+echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
@@ -157,7 +159,7 @@ function doCompute
   sysctl net.ipv4.ip_forward=1
 
 # Networking
-  echo "$BLUE -- Networking --$NORMAL"
+echo -e "$BLUE -- Networking --$NORMAL"
 # Openstack Management Network Questions
   read -p 'What is OpenStack Management Interface ? ' openstackInterface
   inetOI="static"
@@ -171,7 +173,7 @@ function doCompute
 # Ask Confirmation For Change
   askConfirmInterface $openstackInterface $inetOI $addressOI $netmaskOI
   askConfirmInterface $vmInterface $inetVMI $addressVMI $netmaskVMI
-  echo "$RED Your Network file will are Change$NORMAL"
+echo -e "$RED Your Network file will are Change$NORMAL"
   read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
   if [ "$write" = "Y" ]
@@ -182,14 +184,14 @@ function doCompute
   service networking restart
 
 # KVM
-  echo "$BLUE -- KVM --$NORMAL"
+echo -e "$BLUE -- KVM --$NORMAL"
 # Install kvv-checker
   apt-get install -y cpu-checker
   kvm-ok
 # Install kvm
   apt-get install -y kvm libvirt-bin pm-utils
 # configure quemu
-  echo "cgroup_device_acl = [
+echo "cgroup_device_acl = [
 "/dev/null", "/dev/full", "/dev/zero",
 "/dev/random", "/dev/urandom",
 "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
@@ -210,19 +212,19 @@ function doCompute
   service libvirt-bin restart
 
 # OpenVSwitch
-  echo "$BLUE -- OpenVSwitch --$NORMAL"
+echo -e "$BLUE -- OpenVSwitch --$NORMAL"
 # Installation
   apt-get install -y openvswitch-switch openvswitch-datapath-dkms
 # Create Bridge
   ovs-vsctl add-br br-int
 
 # Quantum
-  echo "$BLUE -- Quantum --$NORMAL"
+echo -e "$BLUE -- Quantum --$NORMAL"
 # Installation
   apt-get -y install quantum-plugin-openvswitch-agent
 # Edit ovs_quantum_plugin.ini
   read -p 'What is Openstack controller address ? ' addressOC
-  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: integration_bridge = br-int\)/\1\nintegration_bridge = br-int/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
@@ -239,7 +241,7 @@ function doCompute
   service quantum-plugin-openvswitch-agent restart
 
 # Nova
-  echo "$BLUE -- Nova --$NORMAL"
+echo -e "$BLUE -- Nova --$NORMAL"
 # Installation
   apt-get install -y nova-compute-kvm
 # Edit api-paste.ini
@@ -248,15 +250,15 @@ function doCompute
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = nova/g' /etc/nova/api-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/nova/api-paste.ini
 # Edit nova-compute.conf
-   sed -i 's/\(compute_driver.*\)/#\1\/g' /etc/nova/nova-compute.conf
-  echo "libvirt_ovs_bridge=br-int
+   sed -i 's/\(compute_driver.*\)/#\1/g' /etc/nova/nova-compute.conf
+echo "libvirt_ovs_bridge=br-int
 libvirt_vif_type=ethernet
 libvirt_vif_driver=nova.virt.libvirt.vif.LibvirtHybridOVSBridgeDriver
 libvirt_use_virtio_for_bridges=True" >> /etc/nova/nova-compute.conf
 # Edit nova.conf
   read -p 'What is Openstack Controller Internet address ? ' addressOII
   sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
-  echo "logdir=/var/log/nova
+echo "logdir=/var/log/nova
 state_path=/var/lib/nova
 lock_path=/run/lock/nova
 verbose=True
@@ -315,9 +317,9 @@ cinder_catalog_info=volume:cinder:internalURL" >> /etc/nova/nova.conf
 function doNetwork
 {
 # Ubuntu Preparation
-  echo "$BLUE -- Preparing Ubuntu --$NORMAL"
+echo -e "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
-  echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
+echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
@@ -335,7 +337,7 @@ function doNetwork
   sysctl net.ipv4.ip_forward=1
 
 # Networking
-  echo "$BLUE -- Networking --$NORMAL"
+echo -e "$BLUE -- Networking --$NORMAL"
 # Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
   read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
@@ -357,7 +359,7 @@ function doNetwork
   read -p 'What is address of this Interface ? ' addressVMI
   read -p 'What is netmask of this Interface ? ' netmaskVMI
 # Ask Confirmation For Change
-  echo "$RED Your Network file will are Change$NORMAL"
+echo -e "$RED Your Network file will are Change$NORMAL"
   if [ "$inet" = "static" ]
   then
     askConfirmInterface $internetInterface $inetII $addressII $netmaskII
@@ -373,23 +375,23 @@ function doNetwork
     writeInterface $internetInterface $inetII $addressII $netmaskII "Internet Interface"
     writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack Management"
     writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
-    echo "Your file was writed with new values"
+echo -e "Your file was writed with new values"
   elif [ "$write" = "Y" ] && [ $inetII = "dhcp" ]
   then
     writeInterface $internetInterface $inetII "Internet Interface"
     writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack Management"
     writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
-    echo "Your file was writed with new values"
+echo -e "Your file was writed with new values"
   fi
   service networking restart
-  if [ $inetII = "static" ]
+  if [ $inetII = "dhcp" ]
   then
     addressII=$(ifconfig $inetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
     netmaskII=$(ifconfig $inetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
 
 # OpenVSwitch
-  echo "$BLUE -- OpenVSwitch --$NORMAL"
+echo -e "$BLUE -- OpenVSwitch --$NORMAL"
 # Installation
   apt-get install -y openvswitch-switch openvswitch-datapath-dkms
 # Create Bridge
@@ -399,14 +401,14 @@ function doNetwork
   service networking restart
 
 # Quantum
-  echo "$BLUE -- Quantum --$NORMAL"
+echo -e "$BLUE -- Quantum --$NORMAL"
 # Installation
   apt-get -y install quantum-plugin-openvswitch-agent quantum-dhcp-agent quantum-l3-agent quantum-metadata-agent
 # Edit api-paste.ini
   read -p 'What is Openstack controller address ? ' addressOC
   sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$addressOC"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
 # Edit ovs_quantum_plugin.ini
-  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/quantumUser:quantumPass@'"$addressOC"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: integration_bridge = br-int\)/\1\nintegration_bridge = br-int/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
@@ -436,15 +438,15 @@ function doNetwork
 function doController
 {
 # Ubuntu Preparation
-  echo "$BLUE -- Preparing Ubuntu --$NORMAL"
+echo -e "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
-  echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
+echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
   apt-get update -y
   apt-get upgrade -y
   apt-get dist-upgrade -y
 
 # Networking
-  echo "$BLUE -- Networking --$NORMAL"
+echo -e "$BLUE -- Networking --$NORMAL"
 # Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' internetInterface
   read -p 'Is she Static or Dynamique ? (static|dhcp) ' inetII
@@ -461,37 +463,34 @@ function doController
   read -p 'What is address of this Interface ? ' addressOI
   read -p 'What is netmask of this Interface ? ' netmaskOI
 # Ask Confirmation For Change
-  echo "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
-  if [ "$inetII" = "static"]
+echo -e "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
+  if [ "$inetII" = "static" ]
   then
     askConfirmInterface $internetInterface $inetII $addressII $netmaskII
   else
     askConfirmInterface $internetInterface $inetII
   fi
   askConfirmInterface $openstackInterface $inetOI $addressOI $netmaskOI
-  askConfirmInterface $vmInterface $inetVMI $addressVMI $netmaskVMI
-  echo "$RED Your Network file will are Change$NORMAL"
+echo -e "$RED Your Network file will are Change$NORMAL"
   read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
   if [ "$write" = "Y" ] && [ "$inetII" = "static" ]
   then
     write $internetInterface $inetII $addressOI $netmaskOI "Internet Interface"
     writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack"
-    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
   else
     write $internetInterface $inetII "Internet Interface"
     writeInterface $openstackInterface $inetOI $addressOI $netmaskOI "OpenStack"
-    writeInterface $vmInterface $inetVMI $addressVMI $netmaskVMI "VM Interface"
   fi
   service networking restart
-  if [ "$inetII" = "static" ]
+  if [ "$inetII" = "dhcp" ]
   then
     addressII=$(ifconfig $inetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
     netmaskII=$(ifconfig $inetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
 
 # MySQL + RabbitMQ
-  echo "$BLUE -- MySQL & RabbitMQ --$NORMAL"
+echo -e "$BLUE -- MySQL & RabbitMQ --$NORMAL"
 # Installation
   apt-get install -y mysql-server python-mysqldb
 # Listen on all address
@@ -501,7 +500,7 @@ function doController
   apt-get install -y rabbitmq-server
   apt-get install -y ntp
 # Create Databases with Permissions
-  echo "CREATE DATABASE keystone;\
+echo "CREATE DATABASE keystone;\
 GRANT ALL ON keystone.* TO 'keystoneUser'@'%' IDENTIFIED BY 'keystonePass';\
 CREATE DATABASE glance;\
 GRANT ALL ON glance.* TO 'glanceUser'@'%' IDENTIFIED BY 'glancePass';\
@@ -510,17 +509,17 @@ GRANT ALL ON quantum.* TO 'quantumUser'@'%' IDENTIFIED BY 'quantumPass';\
 CREATE DATABASE nova;\
 GRANT ALL ON nova.* TO 'novaUser'@'%' IDENTIFIED BY 'novaPass';\
 CREATE DATABASE cinder;\
-GRANT ALL ON cinder.* TO 'cinderUser'@'%' IDENTIFIED BY 'cinderPass';\
-quit;" > mysql -u root -p
+GRANT ALL ON cinder.* TO 'cinderUser'@'%' IDENTIFIED BY 'cinderPass';" > mysqlOpenStack.sql
+mysql -u root -p < mysqlOpenStack.sql
 
 # Other (vlan-bridge)
-  echo "$BLUE -- Other --$NORMAL"
+echo -e "$BLUE -- Other --$NORMAL"
   apt-get install -y vlan bridge-utils
   sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
   sysctl net.ipv4.ip_forward=1
 
 # Keystone
-  echo "$BLUE -- Keystone --$NORMAL"
+echo -e "$BLUE -- Keystone --$NORMAL"
   apt-get install -y keystone
 # Change sql connection keystone.conf
   sed -i 's/^\(connection.*\)/#\1\nconnection = mysql:\/\/keystoneUser:keystonePass@'"$addressOI"'\/keystone/g' /etc/keystone/keystone.conf
@@ -539,7 +538,7 @@ quit;" > mysql -u root -p
   ./keystone_endpoints_basic.sh
 # Create soource files for services connection
   touch sources
-  echo "#Paste the following:
+echo "#Paste the following:
 export OS_TENANT_NAME=admin
 export OS_USERNAME=admin
 export OS_PASSWORD=admin_pass
@@ -547,21 +546,21 @@ export OS_AUTH_URL=\"http://"$addressII":5000/v2.0/\"
 export OS_SERVICE_ENDPOINT=http://"$addressOI":35357/v2.0
 export OS_SERVICE_TOKEN=ADMIN" > sources
   source sources
-  echo "$GREEN Comande keystone user-list$NORMAL"
+echo -e "$GREEN Comande keystone user-list$NORMAL"
   keystone user-list
 
 # Glance
-  echo "$BLUE -- GLANCE --$NORMAL"
+echo -e "$BLUE -- GLANCE --$NORMAL"
   apt-get install -y glance
 # Edit glance-api-paste.ini
-  echo "auth_host = $addressOI
+echo "auth_host = $addressOI
 auth_port = 35357
 auth_protocol = http
 admin_tenant_name = service
 admin_user = glance
 admin_password = service_pass" >> /etc/glance/glance-api-paste.ini
 # Edit glance-registry-paste.ini
-  echo "auth_host = $addressOI
+echo "auth_host = $addressOI
 auth_port = 35357
 auth_protocol = http
 admin_tenant_name = service
@@ -569,24 +568,24 @@ admin_user = glance
 admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
 # Edit glance-api.conf
   sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/glanceUser:glancePass@'"$addressOI"'\/glance/g' /etc/glance/glance-api.conf
-  echo "flavor = keystone" >> /etc/glance/glance-api.conf
+echo -e "flavor = keystone" >> /etc/glance/glance-api.conf
 # Edit glance-registry.conf
   sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/glanceUser:glancePass@'"$addressOI"'\/glance/g' /etc/glance/glance-registry.conf
-  echo "flavor = keystone" >> /etc/glance/glance-registry.conf
+echo "flavor = keystone" >> /etc/glance/glance-registry.conf
   service glance-api restart; service glance-registry restart
 # Sync Database
   glance-manage db_sync
 # Download Image and Add
   glance image-create --name myFirstImage --is-public true --container-format bare --disk-format qcow2 --location https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img
-  echo "$GREEN Commande glance image-list$NORMAL"
+echo -e "$GREEN Commande glance image-list$NORMAL"
   glance image-list
 
 # Quantum
-  echo "$BLUE -- Quantum --$NORMAL"
+echo -e "$BLUE -- Quantum --$NORMAL"
 # Installation
   apt-get install -y quantum-server
 # Edit ovs_quantum_plugin.ini
-  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql://quantumUser:quantumPass@'"$addressOI"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/^\(sql_connection.*\)/#\1\nsql_connection = mysql:\/\/quantumUser:quantumPass@'"$addressOI"'\/quantum/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
@@ -600,7 +599,7 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
   service quantum-server restart
 
 # Nova
-  echo "$BLUE -- Nova --$NORMAL"
+echo -e "$BLUE -- Nova --$NORMAL"
 # Installation
   apt-get install -y nova-api nova-cert novnc nova-consoleauth nova-scheduler nova-novncproxy nova-doc nova-conductor
 # Edit api-paste.ini
@@ -610,7 +609,7 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/nova/api-paste.ini
 # Edit nova.conf
   sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
-  echo "logdir=/var/log/nova
+echo "logdir=/var/log/nova
 state_path=/var/lib/nova
 lock_path=/run/lock/nova
 verbose=True
@@ -618,7 +617,7 @@ api_paste_config=/etc/nova/api-paste.ini
 compute_scheduler_driver=nova.scheduler.simple.SimpleScheduler
 rabbit_host="$addressOI"
 nova_url=http://"$addressOI":8774/v1.1/
-sql_connection=mysql://novaUser:novaPass@"$addressOI"nova
+sql_connection=mysql://novaUser:novaPass@"$addressOI"/nova
 root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
 
 # Auth
@@ -664,11 +663,11 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   home=$(pwd)
   cd /etc/init.d/; for i in $( ls nova-* ); do sudo service $i restart; done
   cd $home
-  echo "$GREEN Commende nova-manage service list$NORMAL"
+echo -e "$GREEN Commende nova-manage service list$NORMAL"
   nova-manage service list
 
 # Cinder
-  echo "$BLUE -- Cinder --$NORMAL"
+echo -e "$BLUE -- Cinder --$NORMAL"
 # Installation
   apt-get install -y cinder-api cinder-scheduler cinder-volume iscsitarget open-iscsi iscsitarget-dkms
   sed -i 's/false/true/g' /etc/default/iscsitarget
@@ -681,8 +680,8 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   sed -i 's/\(^admin_user.*\)/#\1\nadmin_user = cinder/g' /etc/cinder/api-paste.ini
   sed -i 's/\(^admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/cinder/api-paste.ini
 # Edit cinder.conf
-  echo "sql_connection = mysql://cinderUser:cinderPass@"$addressOI"/cinder" >> /etc/cinder/cinder.conf
-  echo "iscsi_ip_address=$addressOI" >> /etc/cinder/cinder.conf
+echo "sql_connection = mysql://cinderUser:cinderPass@"$addressOI"/cinder" >> /etc/cinder/cinder.conf
+echo "iscsi_ip_address=$addressOI" >> /etc/cinder/cinder.conf
 # Sync Database
   cinder-manage db sync
   read -p "What is the disk for your Volume Group ? " diskVG
@@ -690,12 +689,12 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   pvcreate $diskVG
   vgcreate cinder-volumes $diskVG
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i restart; done
-  echo "$GREEN Commande to vrify all cinder services$NORMAL"
+echo -e "$GREEN Commande to vrify all cinder services$NORMAL"
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i status; done
   cd $home
 
 # Horizon
-  echo "$BLUE -- HORIZON --$NORMAL"
+echo -e "$BLUE -- HORIZON --$NORMAL"
   apt-get install -y openstack-dashboard memcached
 # Remove Ubuntu Theme
   dpkg --purge openstack-dashboard-ubuntu-theme
