@@ -49,13 +49,14 @@ function checkInterface
   done < /etc/network/interfaces
   if [ -z "$checkOK" ]
   then
+    checkOK="false"
     echo "false"
   fi
 }
 
 function checkConfigInterface
 {
-   while read line
+  while read line
   do
     interfaceName=$(echo $line | grep -o "^auto.*" | grep -o "[a-zA-Z0-9]*$")
     if [ "$interfaceName" == "$1" ]
@@ -69,16 +70,23 @@ function checkConfigInterface
     elif [ "$auto" == "true" ] && [ -n "$(echo $line | grep -o ".*")" ] && [ "$checkOK" == "true" ]
     then
       interfaceConf=$(echo "$interfaceConf\n$line")
+    elif [ "$auto" == "true" ] && [ "$(echo $line | grep "^[\ ]*#" | grep -o "#")" == "#" ]
+    then
+      auto="false"
+      checkOK="false"
+      echo -e "$interfaceConf"
     elif [ "$auto" == "true" ] && [ -z "$(echo $line | grep -o ".*")" ] && [ "$checkOK" == "true" ]
     then
       auto="false"
       checkOK="false"
-      echo "$interfaceConf"
+      echo -e "$interfaceConf"
     fi
   done < /etc/network/interfaces
   if [ "$checkOK" == "true" ]
   then
-    echo "$interfaceConf"
+    auto="false"
+    checkOK="false"
+    echo -e "$interfaceConf"
   fi
 }
 
@@ -88,16 +96,16 @@ function askConfirmInterface
   then
     interfaceConf=$(checkConfigInterface $1)
     echo -e $RED"--- OLD Config Interface ---$NORMAL"
-    echo"$interfaceConf"
+    echo -e "$interfaceConf"
   else
     echo -e "$RED This Interface is not configured in your network file$NORMAL"
   fi
     echo -e $RED"--- NEW Config Interface ---$NORMAL"
-    echo "auto $1
+    echo -e "auto $1
 iface $1 inet $2"
   if [ -n "$3" ]
   then
-    echo "address $3
+    echo -e "address $3
 netmask $4"
   fi
 
@@ -125,20 +133,19 @@ function writeInterface
   done
   if [ -n "$5" ]
   then
-    echo "
+    echo -e "
 # $5
 auto $1
 iface $1 inet $2
 address $3
 netmask $4" >> /etc/network/interfaces
   else
-    echo "
+    echo -e "
 # $3
 auto $1
 iface $1 inet $2" >> /etc/network/interfaces
   fi
 }
-
 
 
 
@@ -183,17 +190,18 @@ echo -e "$RED Your Network file /etc/network/interfaces will be change with thes
 # Write File /etc/network/interfaces if continue=Y
   if [ "$write" = "Y" ] && [ "$controllerInetII" = "static" ]
   then
-    write $controllerInternetInterface $controllerInetII $controllerAddressOI $controllerNetmaskOI "Internet Interface"
+    writeInterface $controllerInternetInterface $controllerInetII $controllerAddressOI $controllerNetmaskOI "Internet Interface"
     writeInterface $controllerOpenstackInterface $controllerInetOI $controllerAddressOI $controllerNetmaskOI "OpenStack"
-  else
-    write $controllerInternetInterface $controllerInetII "Internet Interface"
+  elif [ "$write" = "Y" ] && [ "$controllerInetII" = "dhcp" ]
+  then
+    writeInterface $controllerInternetInterface $controllerInetII "Internet Interface"
     writeInterface $controllerOpenstackInterface $controllerInetOI $controllerAddressOI $controllerNetmaskOI "OpenStack"
   fi
-  service networking restart
+  /etc/init.d/networking restart
   if [ "$controllerInetII" = "dhcp" ]
   then
-    controllerAddressII=$(ifconfig $controllerInetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
-    controllerNetmaskII=$(ifconfig $controllerInetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    controllerAddressII=$(ifconfig $controllerInetII | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    controllerNetmaskII=$(ifconfig $controllerInetII | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
 
 # MySQL + RabbitMQ
@@ -480,11 +488,11 @@ function doNetwork
     writeInterface $networkVmInterface $networkInetVMI $networkAddressVMI $networkNetmaskVMI "VM Interface"
   echo "Your file was writed with new values"
   fi
-  service networking restart
+  /etc/init.d/networking restart
   if [ $networkInetII = "dhcp" ]
   then
-    networkAddressII=$(ifconfig $networkInetII | grep -o "inet addr:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
-    networkNetmaskII=$(ifconfig $networkInetII | grep -o "Mask:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    networkAddressII=$(ifconfig $networkInetII | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    networkNetmaskII=$(ifconfig $networkInetII | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
 
 # OpenVSwitch
@@ -589,7 +597,7 @@ function doCompute
     writeInterface $computeOpenstackInterface $computeInetOI $computeAddressOI $computeNetmaskOI "OpenStack Management"
     writeInterface $computeVmInterface $computeInetVMI $computeAddressVMI $computeNetmaskVMI "VM Interface"
   fi
-  service networking restart
+  /etc/init.d/networking restart
 
 # KVM
   echo -e "$BLUE -- KVM --$NORMAL"
