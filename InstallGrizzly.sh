@@ -151,7 +151,18 @@ iface $1 inet $2" >> /etc/network/interfaces
   fi
 }
 
-
+# Erase Interface
+function removeInterface
+{
+  numLineStart=$(grep -n "^auto $1" /etc/network/interfaces | cut -d":" -f1 | head -n 1)
+  nbLine=$(echo "$(checkConfigInterface $1)" | wc -l)
+  i="1"
+  while [ "$i" -le "$nbLine" ] && [ -n "$numLineStart" ]
+  do
+    sed -i "$numLineStart"'d' /etc/network/interfaces
+    i=$(($i+1))
+  done
+}
 
 function doController
 {
@@ -167,19 +178,19 @@ function doController
   echo -e "$BLUE -- Networking --$NORMAL"
 # Internet Network Questions
   read -p 'What is Internet Interface (Exposing Interface API) ? ' controllerInternetInterface
-  read -p 'Is she Static or Dynamique ? (static|dhcp) ' controllerInetII
+  read -p 'Is it Static or Dynamic ? (static|dhcp) ' controllerInetII
   if [ "$controllerInetII" = "static" ]
   then
-    read -p 'What is address of this Interface ? ' controllerAddressII
-    read -p 'What is netmask of this Interface ? ' controllerNetmaskII
-    read -p 'What is gateway of this Interface ? ' controllerGatewayII
-    read -p 'What is DNS of this Interface ? ' controllerDnsII
+    read -p 'What is the address of this Interface ? ' controllerAddressII
+    read -p 'What is the netmask of this Interface ? ' controllerNetmaskII
+    read -p 'What is the gateway of this Interface ? ' controllerGatewayII
+    read -p 'What is the DNS of this Interface ? ' controllerDnsII
   fi
 # Openstack Management Network Questions
-  read -p 'What is OpenStack Management Interface ? ' controllerOpenstackInterface
+  read -p 'What is the OpenStack Management Interface ? ' controllerOpenstackInterface
   controllerInetOI="static"
-  read -p 'What is address of this Interface ? ' controllerAddressOI
-  read -p 'What is netmask of this Interface ? ' controllerNetmaskOI
+  read -p 'What is the address of this Interface ? ' controllerAddressOI
+  read -p 'What is the netmask of this Interface ? ' controllerNetmaskOI
 # Ask Confirmation For Change
 echo -e "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
   if [ "$controllerInetII" = "static" ]
@@ -207,10 +218,13 @@ echo -e "$RED Your Network file /etc/network/interfaces will be change with thes
     controllerAddressII=$(ifconfig $controllerInternetInterface | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
     controllerNetmaskII=$(ifconfig $controllerInternetInterface | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
-export controllerAddressII=$controllerAddressII
-echo "controllerAddressII=$controllerAddressII" >> .bashrc
-export controllerAddressOI=$controllerAddressOI
-echo "controllerAddressOI=$controllerAddressOI" >> .bashrc
+echo "controllerInternetInterface=$controllerInternetInterface" >> openstack.conf
+echo "controllerInetII=$controllerInetII" >> openstack.conf
+echo "controllerAddressII=$controllerAddressII" >> openstack.conf
+echo "controllerNetmaskII=$controllerNetmaskII" >> openstack.conf
+echo "controllerOpenstackInterface=$controllerOpenstackInterface" >> openstack.conf
+echo "controllerAddressOI=$controllerAddressOI" >> openstack.conf
+echo "controllerNetmaskOI=$controllerNetmaskOI" >> openstack.conf
 
 # MySQL + RabbitMQ
   echo -e "$BLUE -- MySQL & RabbitMQ --$NORMAL"
@@ -518,6 +532,10 @@ function doNetwork
     networkAddressII=$(ifconfig $networkInternetInterface | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
     networkNetmaskII=$(ifconfig $networkInternetInterface | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
+echo "networkVmInterface=$networkVmInterface" >> openstack.conf
+echo "networkAddressVMI=$networkAddressVMI" >> openstack.conf
+echo "networkNetmaskVMI=$networkNetmaskVMI" >> openstack.conf
+
   if [ "$doControllerNode" != "true" ]
   then
     read -p 'What is Openstack controller management address ? ' controllerAddressOI
@@ -531,7 +549,8 @@ function doNetwork
   sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
   sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
   sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server ntp.ubuntu.com/server '"$controllerAddressOI"'/g' /etc/ntp.conf
+  sed -i 's/server ntp.ubuntu.cofconfig
+  m/server '"$controllerAddressOI"'/g' /etc/ntp.conf
   service ntp restart
 
 # OpenVSwitch
@@ -541,8 +560,34 @@ function doNetwork
 # Create Bridge
   ovs-vsctl add-br br-int
   ovs-vsctl add-br br-ex
+  removeInterface $networkInternetInterface
+  echo '
+# Internet Interface with br-ex
+auto '$networkInternetInterface'
+iface '$networkInternetInterface' inet manual
+up ifconfig $IFACE 0.0.0.0 up
+up ip link set $IFACE promisc on
+down ip link set $IFACE promisc off
+down ifconfig $IFACE down' >> /etc/network/interfaces
+  if [ "$networkInetII" == "static" ]
+  then
+    echo "
+# Internet Interface br-ex
+auto br-ex
+iface br-ex inet static
+address $networkAddressII
+netmask $networkNetmaskII
+gateway $networkGatewayII
+dns-netmask $networkDnsII" >> /etc/network/interfaces
+  elif [ "$networkInetII" == "dhcp" ]
+  then
+    echo "
+# Internet Interface br-ex
+auto br-ex
+iface br-ex inet static" >> /etc/network/interfaces
+  fi
   ovs-vsctl add-port br-ex $networkInternetInterface
-  service networking restart
+  /etc/init.d/networking restart
 
 # Quantum
   echo -e "$BLUE -- Quantum --$NORMAL"
@@ -830,7 +875,7 @@ read -p 'Do you whant to install Controller node ? (Y/N) ' controllerNode
 if [ "$controllerNode" == "Y" ]
 then
   export doControllerNode="true"
-  echo "doControllerNode=\"true\"" >> .bashrc
+  echo "doControllerNode=true" >> openstack.conf
   doController
 fi
 
@@ -839,7 +884,7 @@ read -p 'Do you whant to install Network node ? (Y/N) ' networkNode
 if [ "$networkNode" == "Y" ]
 then
   export doNetworkNode="true"
-  echo "doNetworkNode=\"true\"" >> .bashrc
+  echo "doNetworkNode=true" >> openstack.conf
   doNetwork
 fi
 
@@ -848,7 +893,7 @@ read -p 'Do you whant to install Conpute node ? (Y/N) ' computeNode
 if [ "$computeNode" == "Y" ]
 then
   export doComputeNode="true"
-  echo "doComputeNode=\"true\"" >> .bashrc
+  echo "doComputeNode=true" >> openstack.conf
   doCompute
 fi
 
