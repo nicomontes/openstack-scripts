@@ -36,6 +36,7 @@ echo "If you install more one Node on this Server you must install Network Node 
 echo ""
 
 # Network functions
+# Check if Interface is configured, return true or false
 function checkInterface
 {
   while read line
@@ -54,6 +55,7 @@ function checkInterface
   fi
 }
 
+# Check the configuration, return the interface configuration
 function checkConfigInterface
 {
   while read line
@@ -90,6 +92,7 @@ function checkConfigInterface
   fi
 }
 
+# return interface configuration for ask of user if he want change
 function askConfirmInterface
 {
   if [ "$(checkInterface $1)" == "true" ]
@@ -121,12 +124,13 @@ iface $1 inet $2")
   fi
 }
 
+# Write new interface configuration
 function writeInterface
 {
   numLineStart=$(grep -n "^auto $1" /etc/network/interfaces | cut -d":" -f1 | head -n 1)
   nbLine=$(echo "$(checkConfigInterface $1)" | wc -l)
   i="1"
-  while [ "$i" -le "$nbLine" ]
+  while [ "$i" -le "$nbLine" ] && [ -n "$numLineStart" ]
   do
     sed -i "$numLineStart"'d' /etc/network/interfaces
     i=$(($i+1))
@@ -188,21 +192,25 @@ echo -e "$RED Your Network file /etc/network/interfaces will be change with thes
   echo -e "$RED Your Network file will are Change$NORMAL"
   read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ "$write" = "Y" ] && [ "$controllerInetII" = "static" ]
+  if [ "$write" == "Y" ] && [ "$controllerInetII" == "static" ]
   then
     writeInterface $controllerInternetInterface $controllerInetII $controllerAddressOI $controllerNetmaskOI "Internet Interface"
     writeInterface $controllerOpenstackInterface $controllerInetOI $controllerAddressOI $controllerNetmaskOI "OpenStack"
-  elif [ "$write" = "Y" ] && [ "$controllerInetII" = "dhcp" ]
+  elif [ "$write" == "Y" ] && [ "$controllerInetII" == "dhcp" ]
   then
     writeInterface $controllerInternetInterface $controllerInetII "Internet Interface"
     writeInterface $controllerOpenstackInterface $controllerInetOI $controllerAddressOI $controllerNetmaskOI "OpenStack"
   fi
   /etc/init.d/networking restart
-  if [ "$controllerInetII" = "dhcp" ]
+  if [ "$controllerInetII" == "dhcp" ]
   then
-    controllerAddressII=$(ifconfig $controllerInetII | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
-    controllerNetmaskII=$(ifconfig $controllerInetII | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    controllerAddressII=$(ifconfig $controllerInternetInterface | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    controllerNetmaskII=$(ifconfig $controllerInternetInterface | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
+export controllerAddressII=$controllerAddressII
+echo "controllerAddressII=$controllerAddressII" >> .bashrc
+export controllerAddressOI=$controllerAddressOI
+echo "controllerAddressOI=$controllerAddressOI" >> .bashrc
 
 # MySQL + RabbitMQ
   echo -e "$BLUE -- MySQL & RabbitMQ --$NORMAL"
@@ -253,8 +261,7 @@ mysql -u root -p < mysqlOpenStack.sql
   ./keystone_endpoints_basic.sh
 # Create soource files for services connection
   touch sources
-  echo "#Paste the following:
-export OS_TENANT_NAME=admin
+  echo "export OS_TENANT_NAME=admin
 export OS_USERNAME=admin
 export OS_PASSWORD=admin_pass
 export OS_AUTH_URL=\"http://"$controllerAddressII":5000/v2.0/\"
@@ -291,6 +298,7 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
 # Sync Database
   glance-manage db_sync
 # Download Image and Add
+  echo -e "$GREEN Download Image$NORMAL"
   glance image-create --name myFirstImage --is-public true --container-format bare --disk-format qcow2 --location https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img
   echo -e "$GREEN Commande glance image-list$NORMAL"
   glance image-list
@@ -304,6 +312,7 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
   sed -i 's/\(# Example: tenant_network_type = gre\)/\1\ntenant_network_type = gre/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Example: tunnel_id_ranges = 1:1000\)/\1\ntunnel_id_ranges = 1:1000/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: enable_tunneling = False\)/\1\nenable_tunneling = True/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
+  sed -i 's/# \(firewall_driver = quantum.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver\)/\1/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
 # Edit api-paste.ini
   sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$controllerAddressOI"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
 # Edit quantum.conf
@@ -365,6 +374,9 @@ firewall_driver=nova.virt.libvirt.firewall.IptablesFirewallDriver
 #Metadata
 service_quantum_metadata_proxy = True
 quantum_metadata_proxy_shared_secret = helloOpenStack
+metadata_host = "$controllerAddressOI"
+metadata_listen = "$controllerAddressOI"
+metadata_listen_port = 8775
 
 # Compute #
 compute_driver=libvirt.LibvirtDriver
@@ -428,14 +440,7 @@ function doNetwork
     apt-get upgrade -y
     apt-get dist-upgrade -y
   fi
-# Install and configure ntp
-  apt-get install -y ntp
-  sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server ntp.ubuntu.com/server 10.10.10.51/g' /etc/ntp.conf
-  service ntp restart
+
 # Install vlan bridge
   apt-get install -y vlan bridge-utils
   sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
@@ -444,8 +449,14 @@ function doNetwork
 # Networking
   echo -e "$BLUE -- Networking --$NORMAL"
 # Internet Network Questions
-  read -p 'What is Internet Interface (Exposing Interface API) ? ' networkInternetInterface
-  read -p 'Is she Static or Dynamique ? (static|dhcp) ' networkInetII
+  if [ "$doControllerNode" != "true" ]
+  then
+    read -p 'What is Internet Interface (Exposing Interface API) ? ' networkInternetInterface
+    read -p 'Is she Static or Dynamique ? (static|dhcp) ' networkInetII
+  else
+    networkInternetInterface=$controllerInternetInterface
+    networkInetII=$controllerInetII
+  fi
   if [ "$networkInetII" = "static" ]
   then
     read -p 'What is address of this Interface ? ' networkAddressII
@@ -454,46 +465,74 @@ function doNetwork
     read -p 'What is DNS of this Interface ? ' networkDnsII
   fi
 # Openstack Management Network Questions
-  read -p 'What is OpenStack Management Interface ? ' networkOpenstackInterface
-  inetOI="static"
-  read -p 'What is address of this Interface ? ' networkAddressOI
-  read -p 'What is netmask of this Interface ? ' networkNetmaskOI
+  if [ "$doControllerNode" != "true" ]
+  then
+    read -p 'What is OpenStack Management Interface ? ' networkOpenstackInterface
+    inetOI="static"
+    read -p 'What is address of this Interface ? ' networkAddressOI
+    read -p 'What is netmask of this Interface ? ' networkNetmaskOI
+  else
+    networkOpenstackInterface=$controllerOpenstackInterface
+    networkAddressOI=$controllerAddressOI
+    networkNetmaskOI=$controllerNetmaskOI
+  fi
 # Openstack Virtual Machine Network Questions
   read -p 'What is Virtual Machine Network Interface ? ' networkVmInterface
-  inetVMI="static"
+  networkInetVMI="static"
   read -p 'What is address of this Interface ? ' networkAddressVMI
   read -p 'What is netmask of this Interface ? ' networkNetmaskVMI
 # Ask Confirmation For Change
   echo -e "$RED Your Network file will are Change$NORMAL"
-  if [ "$networkInet" = "static" ]
+  if [ "$networkInetII" = "static" ] && [ "$doControllerNode" != "true" ]
   then
     askConfirmInterface $networkInternetInterface $networkInetII $networkAddressII $networkNetmaskII
-  else
+  elif [ "$doControllerNode" != "true" ]
+  then
     askConfirmInterface $networkInternetInterface $networkInetII
   fi
-  askConfirmInterface $networkOpenstackInterface $networkInetOI $networkAddressOI $networkNetmaskOI
+  if [ "$doControllerNode" != "true" ]
+  then
+    askConfirmInterface $networkOpenstackInterface $networkInetOI $networkAddressOI $networkNetmaskOI
+  fi
   askConfirmInterface $networkVmInterface $networkInetVMI $networkAddressVMI $networkNetmaskVMI
   read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ "$write" = "Y" ] && [ $networkInetII = "static" ]
+  if [ "$write" == "Y" ] && [ "$networkInetII" == "static" ] && [ "$doControllerNode" != "true" ]
   then
     writeInterface $networkInternetInterface $networkInetII $networkAddressII $networkNetmaskII "Internet Interface"
     writeInterface $networkOpenstackInterface $networkInetOI $networkAddressOI $networkNetmaskOI "OpenStack Management"
-    writeInterface $networkVmInterface $networkInetVMI $networkAddressVMI $networkNetmaskVMI "VM Interface"
-  echo "Your file was writed with new values"
-  elif [ "$write" = "Y" ] && [ $networkInetII = "dhcp" ]
+    echo "Your file was writed with new values"
+  elif [ "$write" == "Y" ] && [ "$networkInetII" == "dhcp" ] && [ "$doControllerNode" != "true" ]
   then
     writeInterface $networkInternetInterface $networkInetII "Internet Interface"
     writeInterface $networkOpenstackInterface $networkInetOI $networkAddressOI $networkNetmaskOI "OpenStack Management"
+    echo "Your file was writed with new values"
+  elif  [ "$write" == "Y" ]
+  then
     writeInterface $networkVmInterface $networkInetVMI $networkAddressVMI $networkNetmaskVMI "VM Interface"
-  echo "Your file was writed with new values"
+    echo "Your file was writed with new values"
   fi
   /etc/init.d/networking restart
-  if [ $networkInetII = "dhcp" ]
+  if [ "$networkInetII" == "dhcp" ]
   then
-    networkAddressII=$(ifconfig $networkInetII | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
-    networkNetmaskII=$(ifconfig $networkInetII | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    networkAddressII=$(ifconfig $networkInternetInterface | grep -o "inet [a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
+    networkNetmaskII=$(ifconfig $networkInternetInterface | grep -o "Mas[a-zA-Z]*:[0-9][\.0-9]*[0-9]" | grep -o "[0-9][\.0-9]*[0-9]")
   fi
+  if [ "$doControllerNode" != "true" ]
+  then
+    read -p 'What is Openstack controller management address ? ' controllerAddressOI
+    export controllerAddressOI=$controllerAddressOI
+    echo "controllerAddressOI=$controllerAddressOI" >> .bashrc
+  fi
+
+# Install and configure ntp
+  apt-get install -y ntp
+  sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+  sed -i 's/server ntp.ubuntu.com/server '"$controllerAddressOI"'/g' /etc/ntp.conf
+  service ntp restart
 
 # OpenVSwitch
   echo -e "$BLUE -- OpenVSwitch --$NORMAL"
@@ -510,10 +549,6 @@ function doNetwork
 # Installation
   apt-get -y install quantum-plugin-openvswitch-agent quantum-dhcp-agent quantum-l3-agent quantum-metadata-agent
 # Edit api-paste.ini
-  if [ "$doControllerNode" != "true" ]
-  then
-    read -p 'What is Openstack controller address ? ' controllerAddressOI
-  fi
   sed -i 's/\(paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory\)/\1\nauth_host = '"$controllerAddressOI"'\nauth_port = 35357\nauth_protocol = http\nadmin_tenant_name = service\nadmin_user = quantum\nadmin_password = service_pass/g' /etc/quantum/api-paste.ini
 # Edit ovs_quantum_plugin.ini
   if [ "$doControllerNode" != "true" ]
@@ -527,7 +562,7 @@ function doNetwork
   sed -i 's/\(# Default: tunnel_bridge = br-tun\)/\1\ntunnel_bridge = br-tun/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
   sed -i 's/\(# Default: local_ip =\)/\1\nlocal_ip = '"$networkAddressOI"'/g' /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini
 # Edit metadata_agent.ini
-  sed -i 's/\(auth_url.*\)/#\1\nauth_url = http:\/\/'"$controllerAddressOI"':35357/v2.0/g' /etc/quantum/metadata_agent.ini
+  sed -i 's/\(auth_url.*\)/#\1\nauth_url = http:\/\/'"$controllerAddressOI"':35357\/v2.0/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_tenant_name.*\)/#\1\nadmin_tenant_name = service/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_user.*\)/#\1\nadmin_user = quantum/g' /etc/quantum/metadata_agent.ini
   sed -i 's/\(admin_password.*\)/#\1\nadmin_password = service_pass/g' /etc/quantum/metadata_agent.ini
@@ -561,14 +596,6 @@ function doCompute
     apt-get dist-upgrade -y
   fi
 
-# Install and configure ntp
-  apt-get install -y ntp
-  sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
-  sed -i 's/server ntp.ubuntu.com/server 10.10.10.51/g' /etc/ntp.conf
-  service ntp restart
 # Install vlan bridge
   apt-get install -y vlan bridge-utils
   sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
@@ -577,27 +604,70 @@ function doCompute
 # Networking
   echo -e "$BLUE -- Networking --$NORMAL"
 # Openstack Management Network Questions
-  read -p 'What is OpenStack Management Interface ? ' computeOpenstackInterface
-  inetOI="static"
-  read -p 'What is address of this Interface ? ' computeAddressOI
-  read -p 'What is netmask of this Interface ? ' computeNetmaskOI
+  if [ "$doControllerNode" != "true" ]
+  then
+    read -p 'What is OpenStack Management Interface ? ' computeOpenstackInterface
+    inetOI="static"
+    read -p 'What is address of this Interface ? ' computeAddressOI
+    read -p 'What is netmask of this Interface ? ' computeNetmaskOI
+  else
+    computeOpenstackInterface=$controllerOpenstackInterface
+    computeAddressOI=$controllerAddressOI
+    computeNetmaskOI=$controllerNetmaskOI
+  fi
 # Virtual Machine Network Questions
-  read -p 'What is Virtual Machine Interface ? ' computeVmInterface
-  inetVMI="static"
-  read -p 'What is address of this Interface ? ' computeAddressVMI
-  read -p 'What is netmask of this Interface ? ' computeNetmaskVMI
+  if [ "$doNetworkNode" != "true" ]
+  then
+    read -p 'What is Virtual Machine Interface ? ' computeVmInterface
+    inetVMI="static"
+    read -p 'What is address of this Interface ? ' computeAddressVMI
+    read -p 'What is netmask of this Interface ? ' computeNetmaskVMI
+  else
+    computeVmInterface=$networkVmInterface
+    computeAddressVMI=$networkAddressVMI
+    computeNetmaskVMI=$networkNetmaskVMI
+  fi
 # Ask Confirmation For Change
-  askConfirmInterface $computeOpenstackInterface $computeInetOI $computeAddressOI $computeNetmaskOI
-  askConfirmInterface $computeVmInterface $computeInetVMI $computeAddressVMI $computeNetmaskVMI
+  if [ "$doControllerNode" != "true" ]
+  then
+    askConfirmInterface $computeOpenstackInterface $computeInetOI $computeAddressOI $computeNetmaskOI
+  fi
+  if [ "$doNetworkNode" != "true" ]
+  then
+    askConfirmInterface $computeVmInterface $computeInetVMI $computeAddressVMI $computeNetmaskVMI
+  fi
   echo -e "$RED Your Network file will are Change$NORMAL"
   read -p "Do you want to continue ? (Y/N) " write
 # Write File /etc/network/interfaces if continue=Y
-  if [ "$write" = "Y" ]
+  if [ "$write" == "Y" ] && [ "$doControllerNode" != "true" ]
   then
     writeInterface $computeOpenstackInterface $computeInetOI $computeAddressOI $computeNetmaskOI "OpenStack Management"
+  fi
+  if [ "$write" == "Y" ] && [ "$doNetworkNode" != "true" ]
+  then
     writeInterface $computeVmInterface $computeInetVMI $computeAddressVMI $computeNetmaskVMI "VM Interface"
   fi
   /etc/init.d/networking restart
+
+  if [ "$doControllerNode" != "true" ] && [ "$doNetworkNode" != "true" ]
+  then
+    read -p 'What is Openstack controller management address ? ' controllerAddressOI
+  elif [ "$doControllerNode" != "true" ]
+  then
+    read -p 'What is Openstack controller internet address ? ' controllerAddressII
+  fi
+
+# Install and configure ntp
+  if [ "$doNetworkNode" != "true" ]
+  then
+    apt-get install -y ntp
+    sed -i 's/server 0.ubuntu.pool.ntp.org/#server 0.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+    sed -i 's/server 1.ubuntu.pool.ntp.org/#server 1.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+    sed -i 's/server 2.ubuntu.pool.ntp.org/#server 2.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+    sed -i 's/server 3.ubuntu.pool.ntp.org/#server 3.ubuntu.pool.ntp.org/g' /etc/ntp.conf
+    sed -i 's/server ntp.ubuntu.com/server '"$controllerAddressOI"'/g' /etc/ntp.conf
+    service ntp restart
+  fi
 
 # KVM
   echo -e "$BLUE -- KVM --$NORMAL"
@@ -691,16 +761,15 @@ libvirt_use_virtio_for_bridges=True" >> /etc/nova/nova-compute.conf
 # Edit nova.conf
   if [ "$doControllerNode" != "true" ]
   then
-    read -p 'What is Openstack Controller Internet address ? ' controllerAddressII
-  sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
-  echo "logdir=/var/log/nova
+    sed -i 's/\(^[a-z].*\)/#\1/g' /etc/nova/nova.conf
+    echo "logdir=/var/log/nova
 state_path=/var/lib/nova
 lock_path=/run/lock/nova
 verbose=True
 api_paste_config=/etc/nova/api-paste.ini
 compute_scheduler_driver=nova.scheduler.simple.SimpleScheduler
 rabbit_host=$controllerAddressOI
-nova_url=http://"$addressOC":8774/v1.1/
+nova_url=http://"$controllerAddressOI":8774/v1.1/
 sql_connection=mysql://novaUser:novaPass@"$controllerAddressOI"/nova
 root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
 
@@ -734,6 +803,9 @@ firewall_driver=nova.virt.libvirt.firewall.IptablesFirewallDriver
 #Metadata
 service_quantum_metadata_proxy = True
 quantum_metadata_proxy_shared_secret = helloOpenStack
+metadata_host = "$controllerAddressOI"
+metadata_listen = "$controllerAddressOI"
+metadata_listen_port = 8775
 
 # Compute #
 compute_driver=libvirt.LibvirtDriver
@@ -757,7 +829,8 @@ read -p 'Do you whant to install Controller node ? (Y/N) ' controllerNode
 
 if [ "$controllerNode" == "Y" ]
 then
-  doControllerNode="true"
+  export doControllerNode="true"
+  echo "doControllerNode=\"true\"" >> .bashrc
   doController
 fi
 
@@ -765,15 +838,17 @@ read -p 'Do you whant to install Network node ? (Y/N) ' networkNode
 
 if [ "$networkNode" == "Y" ]
 then
-  doNetworkNode="true"
-  doController
+  export doNetworkNode="true"
+  echo "doNetworkNode=\"true\"" >> .bashrc
+  doNetwork
 fi
 
-read -p 'Do you whant to install Conpute node ? (Y/N) ' conputeNode
+read -p 'Do you whant to install Conpute node ? (Y/N) ' computeNode
 
 if [ "$computeNode" == "Y" ]
 then
-  doConputeNode="true"
-  doConpute
+  export doComputeNode="true"
+  echo "doComputeNode=\"true\"" >> .bashrc
+  doCompute
 fi
 
