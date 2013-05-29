@@ -201,7 +201,9 @@ function doController
     read -p 'What is the address of this Interface ? ' controllerAddressII
     read -p 'What is the netmask of this Interface ? ' controllerNetmaskII
     read -p 'What is the gateway of this Interface ? ' controllerGatewayII
+    echo "controllerGatewayII=$controllerGatewayII" >> openstack.conf
     read -p 'What is the DNS of this Interface ? ' controllerDnsII
+    echo "controllerDnsII=$controllerDnsII" >> openstack.conf
   fi
 # Openstack Management Network Questions
   read -p 'What is the OpenStack Management Interface ? ' controllerOpenstackInterface
@@ -217,7 +219,7 @@ echo -e "$RED Your Network file /etc/network/interfaces will be change with thes
 # Write File /etc/network/interfaces if continue=Y
   if [ "$write" == "Y" ]
   then
-    writeInterface $controllerInternetInterface $controllerInetII $controllerAddressOI $controllerNetmaskOI $controllerGatewayII $controllerDnsII "Internet Interface"
+    writeInterface $controllerInternetInterface $controllerInetII $controllerAddressII $controllerNetmaskII $controllerGatewayII $controllerDnsII "Internet Interface"
     writeInterface $controllerOpenstackInterface $controllerInetOI $controllerAddressOI $controllerNetmaskOI "OpenStack"
   fi
   /etc/init.d/networking restart
@@ -458,6 +460,8 @@ function doNetwork
     controllerInetII="$(cat openstack.conf | grep "^controllerInetII.*" | grep -o "[a-zA-Z0-9\.]*$")"
     controllerAddressII="$(cat openstack.conf | grep "^controllerAddressII.*" | grep -o "[a-zA-Z0-9\.]*$")"
     controllerNetmaskII="$(cat openstack.conf | grep "^controllerNetmaskII.*" | grep -o "[a-zA-Z0-9\.]*$")"
+    controllerGatewayII="$(cat openstack.conf | grep "^controllerGatewayII.*" | grep -o "[a-zA-Z0-9\.]*$")"
+    controllerDnsII="$(cat openstack.conf | grep "^controllerDnsII.*" | grep -o "[a-zA-Z0-9\.]*$")"
     contorllerOpenstackInterface="$(cat openstack.conf | grep "^controllerOpenstackInterface.*" | grep -o "[a-zA-Z0-9\.]*$")"
     controllerInetOI="$(cat openstack.conf | grep "^controllerInetOI.*" | grep -o "[a-zA-Z0-9\.]*$")"
     controllerAddressOI="$(cat openstack.conf | grep "^controllerAddressOI.*" | grep -o "[a-zA-Z0-9\.]*$")"
@@ -568,16 +572,6 @@ echo "networkNetmaskVMI=$networkNetmaskVMI" >> openstack.conf
   sed -i 's/server ntp.ubuntu.com/server '"$controllerAddressOI"'/g' /etc/ntp.conf
   service ntp restart
 
-  removeInterface $networkInternetInterface
-  echo '
-# Internet Interface with br-ex
-auto '$networkInternetInterface'
-iface '$networkInternetInterface' inet manual
-up ifconfig $IFACE 0.0.0.0 up
-up ip link set $IFACE promisc on
-down ip link set $IFACE promisc off
-down ifconfig $IFACE down' >> /etc/network/interfaces
-
 # OpenVSwitch Part 1
   echo -e "$BLUE -- OpenVSwitch Part 1 --$NORMAL"
 # Installation
@@ -630,6 +624,15 @@ down ifconfig $IFACE down' >> /etc/network/interfaces
 
 # OpenVSwitch part 2
 echo -e "$BLUE -- OpenVSwitch Part 2 --$NORMAL"
+removeInterface $networkInternetInterface
+  echo '
+# Internet Interface with br-ex
+auto '$networkInternetInterface'
+iface '$networkInternetInterface' inet manual
+up ifconfig $IFACE 0.0.0.0 up
+up ip link set $IFACE promisc on
+down ip link set $IFACE promisc off
+down ifconfig $IFACE down' >> /etc/network/interfaces
   if [ "$networkInetII" == "static" ]
   then
     echo "
