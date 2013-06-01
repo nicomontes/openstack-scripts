@@ -22,7 +22,7 @@ echo -e "$RED   |______Management_Network_______|    $YELLOW|"
 echo -e "$RED   |       10.10.10.0/24                $YELLOW|                         _  _"
 echo -e $RED'   |'"$NORMAL"'    ___________________             '"$YELLOW"'|                        ( `   )_'
 echo -e $RED'   |    '"$NORMAL"'|'"$BLUE"' Controller Node'"$NORMAL"' |             '"$YELLOW"'|__Internet_Network_____( Internet `)'
-echo -e $RED'   |    '"$NORMAL"'| -keystone       |             '"$YELLOW"'|  192.168.100.0/2     (_   (_ .  _) _)'
+echo -e $RED'   |    '"$NORMAL"'| -keystone       |             '"$YELLOW"'|  192.168.100.0/24    (_   (_ .  _) _)'
 echo -e "$RED   |    $NORMAL| -glance         |             $YELLOW|"
 echo -e "$RED   |    $NORMAL| -horizon        |             $YELLOW|"
 echo -e "$RED   |    $NORMAL| -nova services  |             $YELLOW|"
@@ -183,6 +183,21 @@ function removeInterface
 
 function doController
 {
+
+  echo -e ""
+  echo -e "$NORMAL      ___________________"
+  echo -e "$NORMAL      |$BLUE Controller Node$NORMAL |"
+  echo -e "$NORMAL      | -keystone       |"
+  echo -e "$NORMAL      | -glance         |"
+  echo -e "$NORMAL      | -horizon        |"
+  echo -e "$NORMAL      | -nova services  |"
+  echo -e "$NORMAL      | -quantum server |"
+  echo -e "$NORMAL      | $RED eth0  $YELLOW   eth1$NORMAL  |$YELLOW                 _ _"
+  echo -e "$NORMAL      |___$RED|$NORMAL""________$YELLOW|$NORMAL""____|$YELLOW                ( \`   )_"
+  echo -e "$RED          |      $YELLOW  |__Internet_Network__( Internet \`)$NORMAL"
+  echo -e "$RED Management Network $YELLOW                   (_   (_ .  _) _)"
+  echo -e ""
+
 # Ubuntu Preparation
   echo -e "$BLUE -- Preparing Ubuntu --$NORMAL"
   apt-get install -y ubuntu-cloud-keyring
@@ -194,22 +209,22 @@ function doController
 # Networking
   echo -e "$BLUE -- Networking --$NORMAL"
 # Internet Network Questions
-  read -p 'What is Internet Interface (Exposing Interface API) ? ' controllerInternetInterface
+  read -p 'What is Internet Interface (API Interface) ? ' controllerInternetInterface
   read -p 'Is it Static or Dynamic ? (static|dhcp) ' controllerInetII
   if [ "$controllerInetII" = "static" ]
   then
-    read -p 'What is the address of this Interface ? ' controllerAddressII
-    read -p 'What is the netmask of this Interface ? ' controllerNetmaskII
-    read -p 'What is the gateway of this Interface ? ' controllerGatewayII
+    read -p 'What is the address of Internet Interfac ? ' controllerAddressII
+    read -p 'What is the netmask of Internet Interfac ? ' controllerNetmaskII
+    read -p 'What is the gateway of Internet Interfac ? ' controllerGatewayII
     echo "controllerGatewayII=$controllerGatewayII" >> openstack.conf
-    read -p 'What is the DNS of this Interface ? ' controllerDnsII
+    read -p 'What is the DNS of Internet Interfac ? ' controllerDnsII
     echo "controllerDnsII=$controllerDnsII" >> openstack.conf
   fi
 # Openstack Management Network Questions
   read -p 'What is the OpenStack Management Interface ? ' controllerOpenstackInterface
   controllerInetOI="static"
-  read -p 'What is the address of this Interface ? ' controllerAddressOI
-  read -p 'What is the netmask of this Interface ? ' controllerNetmaskOI
+  read -p 'What is the address of OpenStack Management Interface ? ' controllerAddressOI
+  read -p 'What is the netmask of OpenStack Management Interface ? ' controllerNetmaskOI
 # Ask Confirmation For Change
 echo -e "$RED Your Network file /etc/network/interfaces will be change with these values :$NORMAL"
   askConfirmInterface $controllerInternetInterface $controllerInetII $controllerAddressII $controllerNetmaskII $controllerGatewayII $controllerDnsII
@@ -453,6 +468,20 @@ echo -e "$BLUE -- HORIZON --$NORMAL"
 
 function doNetwork
 {
+
+  echo -e ""
+  echo -e "         __________________"
+  echo -e "         | $BLUE Network Node$NORMAL  |"
+  echo -e "         |  -quantum all  |"
+  echo -e "         |  -brint        |"
+  echo -e "         |                |"
+  echo -e "         |                |"
+  echo -e "         |$GREEN eth1$RED eth0$YELLOW eth2$NORMAL |$YELLOW                   _  _"
+  echo -e "$NORMAL         |__$GREEN|$NORMAL""____$RED|$NORMAL""___$YELLOW""brex$NORMAL""_|$YELLOW                  ( \`   )_"
+  echo -e "$GREEN VM_Network_|$RED    |     $YELLOW|__Internet_Network__( Internet \`)"
+  echo -e "$RED        Management_Network  $YELLOW               (_   (_ .  _) _)"
+  echo -e ""
+
   if [ "$(cat openstack.conf | grep "^doControllerNode.*" | grep -o "[a-z]*$")" == "true" ]
   then
     doControllerNode="true"
@@ -488,7 +517,7 @@ function doNetwork
 # Internet Network Questions
   if [ "$doControllerNode" != "true" ]
   then
-    read -p 'What is Internet Interface (Exposing Interface API) ? ' networkInternetInterface
+    read -p 'What is Internet Interface (API Interface) ? ' networkInternetInterface
     read -p 'Is she Static or Dynamique ? (static|dhcp) ' networkInetII
   else
     networkInternetInterface=$controllerInternetInterface
@@ -496,10 +525,10 @@ function doNetwork
   fi
   if [ "$networkInetII" = "static" ] && [ "$doControllerNode" != "true" ]
   then
-    read -p 'What is address of this Interface ? ' networkAddressII
-    read -p 'What is netmask of this Interface ? ' networkNetmaskII
-    read -p 'What is gateway of this Interface ? ' networkGatewayII
-    read -p 'What is DNS of this Interface ? ' networkDnsII
+    read -p 'What is address of Internet Interface ? ' networkAddressII
+    read -p 'What is netmask of Internet Interface ? ' networkNetmaskII
+    read -p 'What is gateway of Internet Interface ? ' networkGatewayII
+    read -p 'What is DNS of Internet Interface ? ' networkDnsII
   elif [ "$networkInetII" = "static" ]
   then
     controllerGatewayII="$(cat openstack.conf | grep "^controllerGatewayII.*" | grep -o "[a-zA-Z0-9\.]*$")"
@@ -514,8 +543,8 @@ function doNetwork
   then
     read -p 'What is OpenStack Management Interface ? ' networkOpenstackInterface
     inetOI="static"
-    read -p 'What is address of this Interface ? ' networkAddressOI
-    read -p 'What is netmask of this Interface ? ' networkNetmaskOI
+    read -p 'What is address of OpenStack Management Interface ? ' networkAddressOI
+    read -p 'What is netmask of OpenStack Management Interface ? ' networkNetmaskOI
   else
     networkOpenstackInterface=$controllerOpenstackInterface
     networkAddressOI=$controllerAddressOI
@@ -524,8 +553,8 @@ function doNetwork
 # Openstack Virtual Machine Network Questions
   read -p 'What is Virtual Machine Network Interface ? ' networkVmInterface
   networkInetVMI="static"
-  read -p 'What is address of this Interface ? ' networkAddressVMI
-  read -p 'What is netmask of this Interface ? ' networkNetmaskVMI
+  read -p 'What is address of Virtual Machine Network Interface ? ' networkAddressVMI
+  read -p 'What is netmask of Virtual Machine Network Interface ? ' networkNetmaskVMI
 # Ask Confirmation For Change
   echo -e "$RED Your Network file will are Change$NORMAL"
   if [ "$doControllerNode" != "true" ]
@@ -656,6 +685,20 @@ iface br-ex inet dhcp" >> /etc/network/interfaces
 
 function doCompute
 {
+
+  echo ""
+  echo "________________"
+  echo -e "|$BLUE Compute Node$NORMAL |"
+  echo -e "| -nova compute|"
+  echo -e "| -kvm         |"
+  echo -e "| -quantum ovs |"
+  echo -e "| -brint       |"
+  echo -e "|$RED eth0   $GREEN eth1$NORMAL |"
+  echo -e "|__$RED|$NORMAL""_______$GREEN|$NORMAL""___|"
+  echo -e "$RED   |  $GREEN VM_Network"
+  echo -e "$RED Management_Network$NORMAL"
+  echo ""
+
   if [ "$(cat openstack.conf | grep "^doControllerNode.*" | grep -o "[a-z]*$")" == "true" ]
   then
     doControllerNode="true"
@@ -699,8 +742,8 @@ function doCompute
   then
     read -p 'What is OpenStack Management Interface ? ' computeOpenstackInterface
     inetOI="static"
-    read -p 'What is address of this Interface ? ' computeAddressOI
-    read -p 'What is netmask of this Interface ? ' computeNetmaskOI
+    read -p 'What is address of OpenStack Management Interface ? ' computeAddressOI
+    read -p 'What is netmask of OpenStack Management Interface ? ' computeNetmaskOI
   else
     computeOpenstackInterface=$controllerOpenstackInterface
     computeAddressOI=$controllerAddressOI
@@ -711,8 +754,8 @@ function doCompute
   then
     read -p 'What is Virtual Machine Interface ? ' computeVmInterface
     inetVMI="static"
-    read -p 'What is address of this Interface ? ' computeAddressVMI
-    read -p 'What is netmask of this Interface ? ' computeNetmaskVMI
+    read -p 'What is address of Virtual Machine Interface ? ' computeAddressVMI
+    read -p 'What is netmask of Virtual Machine Interface ? ' computeNetmaskVMI
   else
     computeVmInterface=$networkVmInterface
     computeAddressVMI=$networkAddressVMI
@@ -727,8 +770,11 @@ function doCompute
   then
     askConfirmInterface $computeVmInterface $computeInetVMI $computeAddressVMI $computeNetmaskVMI
   fi
-  echo -e "$RED Your Network file will are Change$NORMAL"
-  read -p "Do you want to continue ? (Y/N) " write
+  if [ "$doControllerNode" != "true" ] && [ "$doNetworkNode" != "true" ]
+  then
+    echo -e "$RED Your Network file will are Change$NORMAL"
+    read -p "Do you want to continue ? (Y/N) " write
+  fi
 # Write File /etc/network/interfaces if continue=Y
   if [ "$write" == "Y" ] && [ "$doControllerNode" != "true" ]
   then

@@ -1,0 +1,36 @@
+\select@language {french}
+\contentsline {subsection}{\numberline {1}Source}{3}{subsection.0.0.1}
+\contentsline {subsubsection}{\numberline {a}Keywords}{3}{subsubsection.0.0.1.1}
+\contentsline {section}{\numberline {1}Authors}{3}{section.0.1}
+\contentsline {subsection}{\numberline {1}Contributors}{3}{subsection.0.1.1}
+\contentsline {section}{\numberline {2}What is it?}{3}{section.0.2}
+\contentsline {chapter}{\numberline {1}Requirements}{4}{chapter.1}
+\contentsline {chapter}{\numberline {2}Controller Node}{5}{chapter.2}
+\contentsline {section}{\numberline {1}Preparing Ubuntu}{5}{section.2.1}
+\contentsline {section}{\numberline {2}Networking}{5}{section.2.2}
+\contentsline {section}{\numberline {3}MySQL \& RabbitMQ}{6}{section.2.3}
+\contentsline {section}{\numberline {4}RabbitMQ}{6}{section.2.4}
+\contentsline {section}{\numberline {5}Others}{7}{section.2.5}
+\contentsline {section}{\numberline {6}Keystone}{7}{section.2.6}
+\contentsline {section}{\numberline {7}Glance}{8}{section.2.7}
+\contentsline {section}{\numberline {8}Quantum}{9}{section.2.8}
+\contentsline {section}{\numberline {9}Nova}{10}{section.2.9}
+\contentsline {section}{\numberline {10}Cinder}{12}{section.2.10}
+\contentsline {section}{\numberline {11}Horizon}{13}{section.2.11}
+\contentsline {chapter}{\numberline {3}Network Node}{15}{chapter.3}
+\contentsline {section}{\numberline {1}Preparing the Node}{15}{section.3.1}
+\contentsline {section}{\numberline {2}Networking}{16}{section.3.2}
+\contentsline {section}{\numberline {3}OpenVSwitch (Part1)}{16}{section.3.3}
+\contentsline {section}{\numberline {4}Quantum}{16}{section.3.4}
+\contentsline {section}{\numberline {5}OpenVSwitch (Part2)}{18}{section.3.5}
+\contentsline {chapter}{\numberline {4}Compute Node}{19}{chapter.4}
+\contentsline {section}{\numberline {1}Preparing the Node}{19}{section.4.1}
+\contentsline {section}{\numberline {2}Networking}{20}{section.4.2}
+\contentsline {section}{\numberline {3}KVM}{20}{section.4.3}
+\contentsline {section}{\numberline {4}OpenVSwitch}{21}{section.4.4}
+\contentsline {section}{\numberline {5}Quantum}{21}{section.4.5}
+\contentsline {section}{\numberline {6}Nova}{22}{section.4.6}
+\contentsline {chapter}{\numberline {5}Your first VM}{25}{chapter.5}
+\contentsline {chapter}{\numberline {6}Licensing}{27}{chapter.6}
+\contentsline {chapter}{\numberline {7}Credits}{28}{chapter.7}
+\contentsfinish 
