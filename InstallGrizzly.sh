@@ -340,7 +340,9 @@ admin_password = service_pass" >> /etc/glance/glance-registry-paste.ini
   echo -e "$GREEN Download Image$NORMAL"
   glance image-create --name myFirstImage --is-public true --container-format bare --disk-format qcow2 --location https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img
   echo -e "$GREEN Commande glance image-list$NORMAL"
+  echo -e "$RED"
   glance image-list
+  echo -e "$NORMAL"
 
 # Quantum
   echo -e "$BLUE -- Quantum --$NORMAL"
@@ -381,6 +383,7 @@ rabbit_host="$controllerAddressOI"
 nova_url=http://"$controllerAddressOI":8774/v1.1/
 sql_connection=mysql://novaUser:novaPass@"$controllerAddressOI"/nova
 root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
+multi_instance_display_name_template=%(name)s-%(count)s
 
 # Auth
 use_deprecated_auth=false
@@ -389,6 +392,7 @@ auth_strategy=keystone
 # Imaging service
 glance_api_servers="$controllerAddressOI":9292
 image_service=nova.image.glance.GlanceImageService
+snapshot_image_format=qcow2
 
 # Vnc configuration
 novnc_enabled=true
@@ -418,6 +422,8 @@ metadata_listen_port = 8775
 
 # Compute #
 compute_driver=libvirt.LibvirtDriver
+libvirt_cpu_mode=host-passthrough
+libvirt_type=kvm
 
 # Cinder #
 volume_api_class=nova.volume.cinder.API
@@ -429,7 +435,9 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   cd /etc/init.d/; for i in $( ls nova-* ); do sudo service $i restart; done
   cd $home
   echo -e "$GREEN Commende nova-manage service list$NORMAL"
+  echo -e "$RED"
   nova-manage service list
+  echo -e "$NORMAL"
 
 # Cinder
   echo -e "$BLUE -- Cinder --$NORMAL"
@@ -744,6 +752,7 @@ function doCompute
     inetOI="static"
     read -p 'What is address of OpenStack Management Interface ? ' computeAddressOI
     read -p 'What is netmask of OpenStack Management Interface ? ' computeNetmaskOI
+    computeInetOI="static"
   else
     computeOpenstackInterface=$controllerOpenstackInterface
     computeAddressOI=$controllerAddressOI
@@ -756,6 +765,7 @@ function doCompute
     inetVMI="static"
     read -p 'What is address of Virtual Machine Interface ? ' computeAddressVMI
     read -p 'What is netmask of Virtual Machine Interface ? ' computeNetmaskVMI
+    computeInetVMI="static"
   else
     computeVmInterface=$networkVmInterface
     computeAddressVMI=$networkAddressVMI
@@ -909,6 +919,7 @@ rabbit_host=$controllerAddressOI
 nova_url=http://"$controllerAddressOI":8774/v1.1/
 sql_connection=mysql://novaUser:novaPass@"$controllerAddressOI"/nova
 root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
+multi_instance_display_name_template=%(name)s-%(count)s
 
 # Auth
 use_deprecated_auth=false
@@ -917,6 +928,7 @@ auth_strategy=keystone
 # Imaging service
 glance_api_servers="$controllerAddressOI":9292
 image_service=nova.image.glance.GlanceImageService
+snapshot_image_format=qcow2
 
 # Vnc configuration
 novnc_enabled=true
@@ -940,12 +952,11 @@ firewall_driver=nova.virt.libvirt.firewall.IptablesFirewallDriver
 #Metadata
 service_quantum_metadata_proxy = True
 quantum_metadata_proxy_shared_secret = helloOpenStack
-metadata_host = "$controllerAddressOI"
-metadata_listen = "$controllerAddressOI"
-metadata_listen_port = 8775
 
 # Compute #
 compute_driver=libvirt.LibvirtDriver
+libvirt_cpu_mode=host-passthrough
+libvirt_type=kvm
 
 # Cinder #
 volume_api_class=nova.volume.cinder.API
@@ -988,3 +999,13 @@ then
   echo "doComputeNode=true" >> openstack.conf
   doCompute
 fi
+
+# Change Config File
+echo -e "$RED""If you install NOVA service you must verify state_path entrie in /etc/nova/nova.conf$NORMAL"
+echo -e "All Virtual Machine are stored in state_path"
+echo -e "AND modify user nova in /etc/passwd nova:x:(number):(number)::(state_path):(/bin/bash)"
+echo -e "$RED""If you install CINDER service you must verify state_path entrie in /etc/glance/cinder.conf$NORMAL"
+echo -e "$RED""If you install QUANTUM service you must run visudo and add quantum ALL=NOPASSWD: ALL in and of file$NORMAL"
+echo -e "$RED""IF you install KEYSTONE service and you have a performance issues you can use memcache$NORMAL"
+echo -e "In token section in /etc/keystone/keystone.conf you can use driver = keystone.token.backends.memcache.Token"
+
