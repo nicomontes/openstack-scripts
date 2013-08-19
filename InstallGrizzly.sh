@@ -462,7 +462,7 @@ osapi_volume_listen_port=5900" >> /etc/nova/nova.conf
   pvcreate $diskVG
   vgcreate cinder-volumes $diskVG
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i restart; done
-  echo -e "$GREEN Commande to vrify all cinder services$NORMAL"
+  echo -e "$GREEN Commande to verify all cinder services$NORMAL"
   cd /etc/init.d/; for i in $( ls cinder-* ); do sudo service $i status; done
   cd $home
 
@@ -823,13 +823,13 @@ function doCompute
   kvm-ok
 # Install kvm
   apt-get install -y kvm libvirt-bin pm-utils
-# configure quemu
+# configure qemu
   echo "cgroup_device_acl = [
 "/dev/null", "/dev/full", "/dev/zero",
 "/dev/random", "/dev/urandom",
 "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
 "/dev/rtc", "/dev/hpet","/dev/net/tun"
-]" >> /etc/libvirt/quemu.conf
+]" >> /etc/libvirt/qemu.conf
 # Delete Default Virtuel Bridge
   virsh net-destroy default
   virsh net-undefine default
